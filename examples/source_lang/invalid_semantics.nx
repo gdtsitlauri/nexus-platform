@@ -1,0 +1,7 @@
+fn bad(flag: bool) -> int {
+  var x: int = flag;
+  if (x) {
+    return true;
+  }
+  return missing;
+}

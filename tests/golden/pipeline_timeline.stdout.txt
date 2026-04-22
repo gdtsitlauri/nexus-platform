@@ -1,0 +1,19 @@
+timeline[pipeline]:
+instruction  | 1    | 2    | 3    | 4    | 5    | 6    | 7    | 8    | 9   
+I0@pc0:addiu | IF   | ID   | EX   | MEM  | WB   | .    | .    | .    | .   
+I1@pc1:beq   | .    | IF   | ID   | EX   | MEM  | WB   | .    | .    | .   
+I2@pc2:addiu | .    | .    | IF   | ID!  | .    | .    | .    | .    | .   
+I3@pc3:addiu | .    | .    | .    | IF   | ID   | EX   | MEM  | WB   | .   
+I4@pc4:jr    | .    | .    | .    | .    | IF   | ID   | EX   | MEM  | WB  
+Mode: pipeline
+Predictor: static-not-taken
+Program exited with code 7
+Instructions: 4
+Cycles: 9
+CPI: 2.25
+Stalls: 0
+Load-use stalls: 0
+Flushes: 1
+Forwardings: 2
+Branch predictions: 1
+Branch mispredictions: 1

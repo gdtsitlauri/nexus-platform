@@ -1,0 +1,18 @@
+trace[pipeline]: cycle=1 IF=I0@pc0:addiu ID=- EX=- MEM=- WB=- events=-
+trace[pipeline]: cycle=2 IF=I1@pc1:jr ID=I0@pc0:addiu EX=- MEM=- WB=- events=-
+trace[pipeline]: cycle=3 IF=- ID=I1@pc1:jr EX=I0@pc0:addiu MEM=- WB=- events=-
+trace[pipeline]: cycle=4 IF=- ID=- EX=I1@pc1:jr MEM=I0@pc0:addiu WB=- events=halt(jr $ra sentinel)
+trace[pipeline]: cycle=5 IF=- ID=- EX=- MEM=I1@pc1:jr WB=I0@pc0:addiu events=-
+trace[pipeline]: cycle=6 IF=- ID=- EX=- MEM=- WB=I1@pc1:jr events=-
+Mode: pipeline
+Predictor: static-not-taken
+Program exited with code 7
+Instructions: 2
+Cycles: 6
+CPI: 3.00
+Stalls: 0
+Load-use stalls: 0
+Flushes: 0
+Forwardings: 0
+Branch predictions: 0
+Branch mispredictions: 0

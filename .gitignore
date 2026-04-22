@@ -1,0 +1,16 @@
+/build/
+/build-cuda/
+/build_makefiles_backup/
+/docs/_site/
+/docs/api/
+/.cache/
+/compile_commands.json
+/.codex
+/.codex/
+__pycache__/
+*.py[cod]
+*.swp
+*.swo
+*.tmp
+*.log
+.DS_Store

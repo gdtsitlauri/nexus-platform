@@ -1,0 +1,7 @@
+add_subdirectory(frontend)
+add_subdirectory(semantics)
+add_subdirectory(ir)
+add_subdirectory(passes)
+add_subdirectory(backend_mips)
+add_subdirectory(analysis)
+add_subdirectory(experimental_parallel_parsing)

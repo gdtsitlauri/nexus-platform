@@ -1,0 +1,13 @@
+fn sum_n(n: int) -> int {
+  var i: int = 0;
+  var total: int = 0;
+  while (i < n) {
+    total = total + i;
+    i = i + 1;
+  }
+  return total;
+}
+
+fn main() -> int {
+  return sum_n(4);
+}

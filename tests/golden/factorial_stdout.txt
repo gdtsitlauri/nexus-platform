@@ -1,0 +1,4 @@
+Mode: functional
+Program exited with code 120
+Instructions: 203
+Cycles: 203

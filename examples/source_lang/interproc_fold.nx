@@ -1,0 +1,7 @@
+fn inc(x: int) -> int {
+  return x + 1;
+}
+
+fn main() -> int {
+  return inc(4) + inc(2);
+}

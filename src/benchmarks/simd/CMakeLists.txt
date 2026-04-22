@@ -1,0 +1,6 @@
+add_executable(simd_bench "${PROJECT_SOURCE_DIR}/benchmarks/simd/simd_bench.cpp")
+set_target_properties(simd_bench PROPERTIES OUTPUT_NAME "simd-bench")
+target_link_libraries(simd_bench PRIVATE nexus_common)
+nexus_apply_project_options(simd_bench)
+nexus_set_warnings(simd_bench)
+nexus_enable_sanitizers(simd_bench)

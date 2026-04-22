@@ -1,0 +1,6 @@
+trace[single-cycle]: cycle=1 pc=0 opcode=addiu control={reg_write, imm, alu=add} next_pc=1 write=$v0<-7
+trace[single-cycle]: cycle=2 pc=1 opcode=jr control={jr, alu=none} next_pc=2
+Mode: single-cycle
+Program exited with code 7
+Instructions: 2
+Cycles: 2

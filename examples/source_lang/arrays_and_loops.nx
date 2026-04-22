@@ -1,0 +1,18 @@
+fn sum4(values: int[4]) -> int {
+  var i: int = 0;
+  var total: int = 0;
+  while (i < 4) {
+    total = total + values[i];
+    i = i + 1;
+  }
+  return total;
+}
+
+fn main() -> int {
+  var data: int[4];
+  data[0] = 1;
+  data[1] = 2;
+  data[2] = 3;
+  data[3] = 4;
+  return sum4(data);
+}

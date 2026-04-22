@@ -1,0 +1,12 @@
+PROJECT_NAME           = "Nexus"
+PROJECT_NUMBER         = "@NEXUS_VERSION_LABEL@"
+OUTPUT_DIRECTORY       = "@PROJECT_BINARY_DIR@/docs"
+INPUT                  = "@PROJECT_SOURCE_DIR@/README.md" \
+                         "@PROJECT_SOURCE_DIR@/ARCHITECTURE.md" \
+                         "@PROJECT_SOURCE_DIR@/src/common/include"
+RECURSIVE              = YES
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO
+EXTRACT_ALL            = YES

@@ -1,0 +1,12 @@
+trace[multi-cycle]: cycle=1 control=microcode state=fetch pc=0 opcode=addiu signals={ir_write, mem_read, pc_write} action=microcode IF
+trace[multi-cycle]: cycle=2 control=microcode state=decode pc=0 opcode=addiu signals={reg_read} action=microcode ID
+trace[multi-cycle]: cycle=3 control=microcode state=execute-imm pc=0 opcode=addiu signals={alu} action=microcode EXI: ALUOut <- f(A, imm)
+trace[multi-cycle]: cycle=4 control=microcode state=writeback-imm pc=0 opcode=addiu signals={reg_write} action=microcode WBI: Reg[rt] <- ALUOut
+trace[multi-cycle]: cycle=5 control=microcode state=fetch pc=1 opcode=jr signals={ir_write, mem_read, pc_write} action=microcode IF
+trace[multi-cycle]: cycle=6 control=microcode state=decode pc=1 opcode=jr signals={reg_read} action=microcode ID
+trace[multi-cycle]: cycle=7 control=microcode state=execute-jump-register pc=1 opcode=jr signals={pc_write} action=microcode JR: PC <- A
+Mode: multi-cycle
+Control: microcode
+Program exited with code 7
+Instructions: 2
+Cycles: 7

@@ -1,0 +1,6 @@
+trace: pc=0 addiu $v0, $zero, 7
+trace: pc=1 jr $ra
+Mode: functional
+Program exited with code 7
+Instructions: 2
+Cycles: 2
