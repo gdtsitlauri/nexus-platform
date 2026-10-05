@@ -1,0 +1,8 @@
+# Wavefront (Gauss-Seidel-like) stencil: both loops carry a dependence, so neither is parallel.
+# Skewing j by i (T = [[1,0],[1,1]]) followed by an interchange makes the inner loop parallel.
+params N = 6, M = 7
+for i = 1 to N {
+  for j = 1 to M {
+    A[i][j] = A[i - 1][j] + A[i][j - 1]
+  }
+}

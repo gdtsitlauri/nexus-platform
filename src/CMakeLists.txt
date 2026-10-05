@@ -20,6 +20,7 @@ target_link_libraries(
     nexus_isa_styles
     nexus_formal
     nexus_types
+    nexus_polyhedral
     nexus_mips_assembler
     nexus_mips_loader
     nexus_sim_functional)

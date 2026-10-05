@@ -1,0 +1,9 @@
+# Triangular domain with two statements: a loop-independent flow dependence S1 -> S2 and
+# an independent pair that the GCD-tightened Fourier-Motzkin test proves impossible.
+params N = 8
+for i = 0 to N {
+  for j = 0 to i {
+    B[i][j] = A[2 * i][j] + 1
+    A[2 * i + 1][j] = B[i][j] * 3
+  }
+}

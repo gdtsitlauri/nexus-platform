@@ -1,0 +1,7 @@
+# Distance (1,-1): interchanging i and j would reverse the dependence, so it is illegal.
+params N = 6
+for i = 1 to N {
+  for j = 0 to N - 1 {
+    A[i][j] = A[i - 1][j + 1] * 2 + 1
+  }
+}

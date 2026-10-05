@@ -30,6 +30,7 @@
 #include "nexus/compiler/isa_styles/isa_styles.hpp"
 #include "nexus/compiler/ir/printer.hpp"
 #include "nexus/compiler/passes/interprocedural_pass.hpp"
+#include "nexus/compiler/polyhedral/polyhedral.hpp"
 #include "nexus/compiler/passes/affine_stripmine.hpp"
 #include "nexus/compiler/passes/loop_unroll.hpp"
 #include "nexus/compiler/semantics/semantic_analyzer.hpp"
@@ -67,6 +68,7 @@ void print_usage(std::ostream& stream) {
          << "  nexusc isa <file> [--style stack|accumulator|register-memory|all] [--listing]\n"
          << "  nexusc regex <pattern> [--nfa] [--match <text>...]\n"
          << "  nexusc infer \"<mini-ML expression>\" [--trace]\n"
+         << "  nexusc poly <file.loop> [interchange a b | reverse k | skew target source factor]...\n"
          << "  nexusc grammar <file.g> first-follow|transform|ll1|lr0|slr|lr1|lalr|earley [\"tokens\"] [--items]\n";
 }
 
@@ -685,6 +687,91 @@ int run_grammar(int argc, char** argv) {
   return 1;
 }
 
+int run_poly(int argc, char** argv) {
+  namespace poly = nexus::compiler::polyhedral;
+  LoadedSource source;
+  if (!load_source_file(argv[2], source)) {
+    return 1;
+  }
+  const auto parsed = poly::parse_loop_nest(source.text);
+  if (!parsed.nest.has_value()) {
+    std::cerr << "error: " << parsed.error << '\n';
+    return 1;
+  }
+  const auto& nest = *parsed.nest;
+  const auto analysis = poly::analyze_dependences(nest);
+  std::cout << poly::print_dependences(nest, analysis);
+  const std::size_t depth = nest.indices.size();
+  if (argc == 3) {
+    return 0;
+  }
+  poly::Matrix transform(depth, std::vector<std::int64_t>(depth, 0));
+  for (std::size_t index = 0; index < depth; ++index) {
+    transform[index][index] = 1;
+  }
+  auto number = [&](int index) -> std::optional<long long> {
+    if (index >= argc) {
+      return std::nullopt;
+    }
+    try {
+      return std::stoll(argv[index]);
+    } catch (...) {
+      return std::nullopt;
+    }
+  };
+  std::string description;
+  for (int index = 3; index < argc;) {
+    const std::string op = argv[index];
+    std::optional<poly::Matrix> step;
+    if (op == "interchange" && number(index + 1) && number(index + 2)) {
+      step = poly::interchange_matrix(depth, static_cast<std::size_t>(*number(index + 1)), static_cast<std::size_t>(*number(index + 2)));
+      index += 3;
+    } else if (op == "reverse" && number(index + 1)) {
+      step = poly::reversal_matrix(depth, static_cast<std::size_t>(*number(index + 1)));
+      index += 2;
+    } else if (op == "skew" && number(index + 1) && number(index + 2) && number(index + 3)) {
+      step = poly::skew_matrix(depth, static_cast<std::size_t>(*number(index + 1)), static_cast<std::size_t>(*number(index + 2)),
+                               *number(index + 3));
+      index += 4;
+    } else {
+      std::cerr << "error: bad transformation near '" << op << "'\n";
+      return 1;
+    }
+    if (!step.has_value()) {
+      std::cerr << "error: transformation '" << op << "' does not fit a " << depth << "-deep nest\n";
+      return 1;
+    }
+    transform = poly::multiply(*step, transform);
+    description += (description.empty() ? "" : " then ") + op;
+  }
+  std::cout << "transformation (" << description << "), T =";
+  for (const auto& row : transform) {
+    std::cout << " [";
+    for (std::size_t col = 0; col < row.size(); ++col) {
+      std::cout << (col ? " " : "") << row[col];
+    }
+    std::cout << ']';
+  }
+  std::cout << '\n';
+  const auto result = poly::apply_transformation(nest, analysis, transform);
+  std::cout << result.reason << '\n';
+  if (!result.legal) {
+    return 2;
+  }
+  std::cout << result.code << "verification: " << result.transformed_instances << " of " << result.original_instances
+            << " instances executed, arrays " << (result.verified ? "identical to the original nest" : "DIFFER") << '\n';
+  std::cout << "parallel loops after the transformation:";
+  bool any_parallel = false;
+  for (std::size_t loop = 0; loop < result.parallel_after.size(); ++loop) {
+    if (result.parallel_after[loop]) {
+      std::cout << " c" << loop + 1;
+      any_parallel = true;
+    }
+  }
+  std::cout << (any_parallel ? "" : " none") << '\n';
+  return result.verified ? 0 : 1;
+}
+
 struct CompileOptions {
   bool emit_ir = false;
   bool emit_assembly = false;
@@ -822,6 +909,14 @@ int main(int argc, char** argv) {
     }
     std::cout << inferred.type << '\n';
     return 0;
+  }
+
+  if (command == "poly") {
+    if (argc < 3) {
+      print_usage(std::cerr);
+      return 1;
+    }
+    return run_poly(argc, argv);
   }
 
   if (command == "grammar") {
