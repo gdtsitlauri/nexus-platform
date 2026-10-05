@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <fstream>
 #include <iostream>
 #include <optional>
 #include <string>
@@ -7,6 +8,7 @@
 
 #include "nexus/common/banner.hpp"
 #include "nexus/common/fpu_lite.hpp"
+#include "nexus/mips/loader/encoder.hpp"
 #include "nexus/mips/loader/parser.hpp"
 #include "nexus/sim/advanced/model.hpp"
 #include "nexus/sim/functional/interpreter.hpp"
@@ -24,6 +26,7 @@ void print_usage(std::ostream& stream) {
   stream << "Usage:\n"
          << "  mips-sim --help\n"
          << "  mips-sim fp-demo <lhs> <rhs>\n"
+         << "  mips-sim encode <file> [-o image.hex]\n"
          << "  mips-sim run <file> --mode functional [--trace] [--stats]\n"
          << "  mips-sim run <file> --mode single-cycle [--trace] [--stats]\n"
          << "  mips-sim run <file> --mode multi-cycle [--control hardwired|microcode] [--trace] [--stats]\n"
@@ -221,6 +224,34 @@ int main(int argc, char** argv) {
   const std::string command = argv[1];
   if (command == "--help" || command == "help") {
     print_usage(std::cout);
+    return 0;
+  }
+
+  if (command == "encode") {
+    if (argc != 3 && !(argc == 5 && std::string_view(argv[3]) == "-o")) {
+      print_usage(std::cerr);
+      return 1;
+    }
+    const auto loaded = nexus::mips::loader::load_program_from_file(argv[2]);
+    if (!loaded.diagnostics.empty()) {
+      return print_loader_diagnostics(loaded.diagnostics);
+    }
+    const auto encoded = nexus::mips::loader::encode_program(*loaded.program);
+    if (!encoded.diagnostics.empty()) {
+      return print_loader_diagnostics(encoded.diagnostics);
+    }
+    const std::string image = nexus::mips::loader::to_hex_image(encoded.words);
+    if (argc == 5) {
+      std::ofstream output(argv[4]);
+      if (!output) {
+        std::cerr << "error: cannot write '" << argv[4] << "'\n";
+        return 1;
+      }
+      output << image;
+    } else {
+      std::cout << image;
+    }
+    std::cerr << "entry " << loaded.program->entry_point << " words " << encoded.words.size() << '\n';
     return 0;
   }
 

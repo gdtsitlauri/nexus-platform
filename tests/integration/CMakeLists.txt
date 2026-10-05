@@ -154,3 +154,13 @@ add_test(
     "${PROJECT_SOURCE_DIR}/tests/integration/isa_styles_test.py"
     "$<TARGET_FILE:nexusc>"
     "${PROJECT_SOURCE_DIR}")
+
+add_test(
+  NAME nexus_hdl_pipeline_cosim
+  COMMAND
+    "${Python3_EXECUTABLE}"
+    "${PROJECT_SOURCE_DIR}/tests/integration/hdl_cosim_test.py"
+    "$<TARGET_FILE:nexusc>"
+    "$<TARGET_FILE:mips_sim>"
+    "${PROJECT_SOURCE_DIR}")
+set_tests_properties(nexus_hdl_pipeline_cosim PROPERTIES SKIP_RETURN_CODE 77)

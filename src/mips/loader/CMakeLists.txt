@@ -1,7 +1,8 @@
 add_library(
   nexus_mips_loader
   STATIC
-    src/parser.cpp)
+    src/parser.cpp
+    src/encoder.cpp)
 
 add_library(Nexus::mips_loader ALIAS nexus_mips_loader)
 
