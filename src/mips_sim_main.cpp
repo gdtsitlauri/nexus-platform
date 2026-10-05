@@ -36,6 +36,8 @@ void print_usage(std::ostream& stream) {
          << "  mips-sim run <file> --mode advanced [--predictor static-not-taken|2bit]\n"
          << "               [--scheduler inorder|vliw-lite|scoreboard] [--issue-width 1|2] [--vliw]\n"
          << "               [--trace] [--stats]\n"
+         << "  mips-sim run <file> --mode advanced --scheduler tomasulo [--issue-width 1-4] [--rob N]\n"
+         << "               [--rs N] [--cdb N] [--pipeline-depth N] [--smt <thread1.s>] [--trace] [--stats]\n"
          << "  mips-sim run <file> --mode parallel [--cores N] [--coherence snoop|directory-lite]\n"
          << "               [--consistency sc|weak-lite] [--interconnect bus|switch|noc-lite]\n"
          << "               [--trace] [--stats]\n";
@@ -99,6 +101,9 @@ std::optional<nexus::sim::advanced::SchedulerKind> parse_advanced_scheduler(std:
   }
   if (text == "scoreboard") {
     return SchedulerKind::Scoreboard;
+  }
+  if (text == "tomasulo") {
+    return SchedulerKind::Tomasulo;
   }
   return std::nullopt;
 }
@@ -268,6 +273,11 @@ int main(int argc, char** argv) {
   std::size_t l2_cache_hit_latency = 4;
   std::size_t l2_cache_miss_penalty = 16;
   std::optional<std::string> scheduler_name;
+  std::optional<std::size_t> rob_entries;
+  std::optional<std::size_t> reservation_stations;
+  std::optional<std::size_t> cdb_width;
+  std::optional<std::size_t> pipeline_depth;
+  std::optional<std::string> smt_file;
 
   for (int index = 3; index < argc; ++index) {
     const std::string option = argv[index];
@@ -371,6 +381,39 @@ int main(int argc, char** argv) {
       vliw = true;
       continue;
     }
+    if (option == "--smt") {
+      if (index + 1 >= argc) {
+        std::cerr << "error: missing program for hardware thread 1 after --smt\n";
+        return 1;
+      }
+      smt_file = argv[++index];
+      continue;
+    }
+    if (option == "--rob" || option == "--rs" || option == "--cdb" || option == "--pipeline-depth") {
+      if (index + 1 >= argc) {
+        std::cerr << "error: missing numeric value after '" << option << "'\n";
+        return 1;
+      }
+      const auto parsed_value = parse_size_value(argv[++index]);
+      if (!parsed_value.has_value() || *parsed_value == 0) {
+        std::cerr << "error: expected a positive integer after '" << option << "'\n";
+        return 1;
+      }
+      if (option == "--rob") {
+        rob_entries = *parsed_value;
+      } else if (option == "--rs") {
+        reservation_stations = *parsed_value;
+      } else if (option == "--cdb") {
+        cdb_width = *parsed_value;
+      } else {
+        if (*parsed_value < 5) {
+          std::cerr << "error: --pipeline-depth must be at least 5\n";
+          return 1;
+        }
+        pipeline_depth = *parsed_value;
+      }
+      continue;
+    }
     if (option == "--ways" || option == "--sets" || option == "--line-words" || option == "--cores" ||
         option == "--issue-width" || option == "--l2-ways" || option == "--l2-sets" ||
         option == "--l2-line-words" || option == "--memory-latency" ||
@@ -472,6 +515,14 @@ int main(int argc, char** argv) {
   }
   if (vliw && mode != "advanced") {
     std::cerr << "error: --vliw is only valid with --mode advanced\n";
+    return 1;
+  }
+  if ((rob_entries || reservation_stations || cdb_width || smt_file) && scheduler_name.value_or("") != "tomasulo") {
+    std::cerr << "error: --rob, --rs, --cdb and --smt are only valid with --scheduler tomasulo\n";
+    return 1;
+  }
+  if (pipeline_depth && mode != "advanced") {
+    std::cerr << "error: --pipeline-depth is only valid with --mode advanced\n";
     return 1;
   }
 
@@ -765,19 +816,33 @@ int main(int argc, char** argv) {
         vliw ? std::string_view("vliw-lite") : std::string_view(scheduler_name.value_or("inorder")));
     if (!scheduler.has_value()) {
       std::cerr << "error: unsupported advanced scheduler '" << scheduler_name.value_or("?")
-                << "', expected 'inorder', 'vliw-lite', or 'scoreboard'\n";
+                << "', expected 'inorder', 'vliw-lite', 'scoreboard', or 'tomasulo'\n";
       return 1;
     }
 
-    const auto result = nexus::sim::advanced::run_program(
-        *parsed.program,
-        {
-            .trace = trace,
-            .predictor = *predictor,
-            .scheduler = *scheduler,
-            .issue_width = vliw ? 2U : issue_width,
-            .memory_words = 1U << 18,
-        });
+    std::optional<nexus::mips::loader::LoadedProgram> smt_program;
+    if (smt_file.has_value()) {
+      auto smt_parsed = nexus::mips::loader::load_program_from_file(*smt_file);
+      if (!smt_parsed.diagnostics.empty()) {
+        return print_loader_diagnostics(smt_parsed.diagnostics);
+      }
+      smt_program = std::move(*smt_parsed.program);
+    }
+
+    nexus::sim::advanced::RunOptions advanced_options{
+        .trace = trace,
+        .predictor = *predictor,
+        .scheduler = *scheduler,
+        .issue_width = vliw ? 2U : issue_width,
+        .memory_words = 1U << 18,
+    };
+    // A D-stage pipeline resolves branches D-2 stages after fetch: the 5-stage default costs 2 cycles.
+    advanced_options.mispredict_penalty = pipeline_depth.has_value() ? *pipeline_depth - 3U : 2U;
+    advanced_options.rob_entries = rob_entries.value_or(advanced_options.rob_entries);
+    advanced_options.reservation_stations = reservation_stations.value_or(advanced_options.reservation_stations);
+    advanced_options.cdb_width = cdb_width.value_or(advanced_options.cdb_width);
+    advanced_options.smt_program = smt_program.has_value() ? &*smt_program : nullptr;
+    const auto result = nexus::sim::advanced::run_program(*parsed.program, advanced_options);
     if (!result.success) {
       std::cerr << "error: " << result.error << '\n';
       return 1;
@@ -797,7 +862,7 @@ int main(int argc, char** argv) {
         ? 0.0
         : static_cast<double>(result.issued_slots) /
             static_cast<double>(result.cycles * (vliw ? 2U : issue_width));
-    return print_summary({
+    print_summary({
         .mode = "advanced",
         .cores = std::nullopt,
         .control = std::nullopt,
@@ -848,6 +913,30 @@ int main(int argc, char** argv) {
         .interconnect_messages = std::nullopt,
         .interconnect_cycles = std::nullopt,
     });
+    if (*scheduler == nexus::sim::advanced::SchedulerKind::Tomasulo) {
+      const double occupancy = result.cycles == 0
+          ? 0.0
+          : static_cast<double>(result.rob_occupancy_sum) / static_cast<double>(result.cycles);
+      std::cout << "ROB entries: " << advanced_options.rob_entries
+                << "\nReservation stations per class: " << advanced_options.reservation_stations
+                << "\nCDB width: " << advanced_options.cdb_width
+                << "\nMispredict penalty: " << advanced_options.mispredict_penalty
+                << "\nAverage ROB occupancy: " << occupancy
+                << "\nMax ROB occupancy: " << result.max_rob_occupancy
+                << "\nROB-full stalls: " << result.rob_full_stalls
+                << "\nReservation-station stalls: " << result.reservation_station_stalls
+                << "\nStructural stalls: " << result.structural_stalls
+                << "\nCDB wait (entry-cycles): " << result.cdb_conflicts
+                << "\nStore-to-load forwards: " << result.load_forwards
+                << "\nReturn predictions: " << result.return_predictions
+                << "\nReturn mispredictions: " << result.return_mispredictions
+                << "\nWrong-path fetch cycles: " << result.wrong_path_cycles << '\n';
+      for (std::size_t thread = 0; thread < result.thread_instructions.size() && smt_program.has_value(); ++thread) {
+        std::cout << "Thread " << thread << ": instructions=" << result.thread_instructions[thread]
+                  << " exit_code=" << result.thread_exit_codes[thread] << '\n';
+      }
+    }
+    return 0;
   }
 
   if (mode == "parallel") {

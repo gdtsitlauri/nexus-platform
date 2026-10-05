@@ -17,6 +17,7 @@ enum class SchedulerKind {
   InOrder,
   VliwLite,
   Scoreboard,
+  Tomasulo,
 };
 
 std::string_view scheduler_name(SchedulerKind scheduler);
@@ -29,6 +30,13 @@ struct RunOptions {
   std::size_t max_instructions = 100000;
   std::size_t mispredict_penalty = 2;
   std::size_t memory_words = 1U << 18;
+  // Tomasulo / out-of-order parameters.
+  std::size_t rob_entries = 16;
+  std::size_t reservation_stations = 4;  // per functional-unit class
+  std::size_t cdb_width = 1;
+  // Simultaneous multithreading: when set, this program runs as hardware thread 1 next to the
+  // main program (thread 0) on the shared Tomasulo back end.
+  const mips::loader::LoadedProgram* smt_program = nullptr;
 };
 
 struct RunResult {
@@ -42,6 +50,19 @@ struct RunResult {
   std::size_t branch_predictions = 0;
   std::size_t branch_mispredictions = 0;
   std::size_t speculative_flush_cycles = 0;
+  // Tomasulo / SMT statistics.
+  std::size_t return_predictions = 0;
+  std::size_t return_mispredictions = 0;
+  std::size_t rob_full_stalls = 0;
+  std::size_t reservation_station_stalls = 0;
+  std::size_t structural_stalls = 0;
+  std::size_t cdb_conflicts = 0;
+  std::size_t load_forwards = 0;
+  std::size_t wrong_path_cycles = 0;
+  std::size_t max_rob_occupancy = 0;
+  std::size_t rob_occupancy_sum = 0;
+  std::vector<std::size_t> thread_instructions;
+  std::vector<std::int32_t> thread_exit_codes;
   std::vector<std::string> trace_lines;
   std::array<std::int32_t, 32> registers{};
 };

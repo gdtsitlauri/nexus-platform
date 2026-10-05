@@ -5,11 +5,15 @@
 namespace nexus::mips::assembler_support {
 
 void append_blank_line(TextProgram& program) {
-  program.lines.push_back(TextLine{.blank = true, .label = {}, .instruction = std::nullopt});
+  program.lines.push_back(TextLine{.blank = true, .label = {}, .instruction = std::nullopt, .comment = {}});
 }
 
 void append_label(TextProgram& program, const std::string& label) {
-  program.lines.push_back(TextLine{.blank = false, .label = label, .instruction = std::nullopt});
+  program.lines.push_back(TextLine{.blank = false, .label = label, .instruction = std::nullopt, .comment = {}});
+}
+
+void append_comment(TextProgram& program, const std::string& comment) {
+  program.lines.push_back(TextLine{.blank = false, .label = {}, .instruction = std::nullopt, .comment = comment});
 }
 
 void append_instruction(
@@ -20,7 +24,8 @@ void append_instruction(
   program.lines.push_back(TextLine{
       .blank = false,
       .label = {},
-      .instruction = TextInstruction{.opcode = opcode, .operands = operands, .comment = comment}});
+      .instruction = TextInstruction{.opcode = opcode, .operands = operands, .comment = comment},
+      .comment = {}});
 }
 
 std::string print_program(const TextProgram& program) {
@@ -33,6 +38,10 @@ std::string print_program(const TextProgram& program) {
 
     if (!line.label.empty()) {
       output << line.label << ":\n";
+    }
+
+    if (!line.comment.empty()) {
+      output << "  # " << line.comment << '\n';
     }
 
     if (!line.instruction.has_value()) {

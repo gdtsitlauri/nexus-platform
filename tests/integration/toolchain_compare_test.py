@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -17,6 +18,9 @@ def require(condition: bool, message: str) -> None:
 
 
 def main() -> int:
+    if shutil.which("clang") is None:
+        print("SKIP: clang is not in PATH")
+        return 77
     nexusc = Path(sys.argv[1])
     repo = Path(sys.argv[2])
     script = repo / "tools" / "toolchain_compare" / "run_toolchain_compare.py"

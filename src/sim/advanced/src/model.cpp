@@ -38,6 +38,7 @@ struct DynamicInstruction {
   bool conditional_branch = false;
   bool actual_taken = false;
   std::string label;
+  std::int32_t memory_address = 0;
 };
 
 struct Packet {
@@ -444,6 +445,7 @@ std::vector<DynamicInstruction> execute_trace(
         break;
       case Opcode::Lw: {
         const std::int32_t address = reg(state, instruction.rs) + instruction.immediate;
+        dynamic.memory_address = address;
         reg(state, instruction.rt) = checked_word_at(state, address, error);
         if (!error.empty()) {
           result.error = error;
@@ -454,6 +456,7 @@ std::vector<DynamicInstruction> execute_trace(
       }
       case Opcode::Sw: {
         const std::int32_t address = reg(state, instruction.rs) + instruction.immediate;
+        dynamic.memory_address = address;
         checked_word_at(state, address, error) = reg(state, instruction.rt);
         if (!error.empty()) {
           result.error = error;
@@ -1059,6 +1062,391 @@ RunResult analyze_vliw(
   return result;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Tomasulo out-of-order core with a reorder buffer, speculation and optional 2-way SMT.
+//
+// Trace-driven timing model (the functional trace supplies values, branch outcomes and memory
+// addresses; this model decides *when* each instruction dispatches, executes, broadcasts and
+// commits):
+//   dispatch : in order, up to issue_width per cycle, into a reorder-buffer slot and a
+//              reservation station of the instruction's class; sources are renamed through a
+//              per-thread register alias table (RAT) to the ROB tag of their latest producer.
+//   execute  : any reservation-station entry whose operands have been broadcast starts on a
+//              free functional unit (oldest first); the multiplier is pipelined, the divider is not.
+//   memory   : loads wait until every older store has computed its address (conservative
+//              disambiguation); a load that matches an older in-flight store takes the value by
+//              store-to-load forwarding in one cycle instead of accessing memory.
+//   writeback: completed results compete for the common data bus (cdb_width per cycle).
+//   commit   : in order from the ROB head, up to issue_width per cycle; stores write memory here.
+//   control  : conditional branches use the selected predictor, jr uses a return-address stack.
+//              On a misprediction the thread's front end fetches down the wrong path until the
+//              branch resolves; that work is squashed and the thread resumes after the redirect
+//              penalty (mispredict_penalty cycles), exactly as with speculative execution.
+//   SMT      : two hardware threads share the ROB, reservation stations, functional units and
+//              CDB; each keeps its own RAT, predictor history and return-address stack, and
+//              dispatch uses the ICOUNT policy (the thread with fewer in-flight instructions first).
+// ---------------------------------------------------------------------------------------------
+
+constexpr std::size_t kHiSlot = 32;
+constexpr std::size_t kLoSlot = 33;
+constexpr std::size_t kRenameSlots = 34;
+constexpr std::size_t kUnitKinds = 6;
+constexpr std::size_t kReturnStackDepth = 8;
+
+struct TomasuloEntry {
+  std::size_t thread = 0;
+  const DynamicInstruction* dynamic = nullptr;
+  UnitKind unit = UnitKind::Alu;
+  std::size_t latency = 1;
+  std::vector<std::size_t> sources;     // ROB tags (global entry ids) of in-flight producers
+  std::vector<std::size_t> destinations;  // rename slots written
+  bool is_load = false;
+  bool is_store = false;
+  std::int32_t address = 0;
+  bool started = false;
+  bool finished = false;
+  bool broadcast = false;
+  bool committed = false;
+  bool mispredicted = false;
+  bool forwarded_load = false;
+  std::size_t finish_cycle = 0;
+  std::size_t broadcast_cycle = 0;
+};
+
+struct TomasuloThread {
+  const std::vector<DynamicInstruction>* trace = nullptr;
+  std::size_t next = 0;           // next trace index to dispatch
+  std::size_t committed = 0;
+  std::array<std::optional<std::size_t>, kRenameSlots> rat{};
+  TwoBitPredictor predictor;
+  std::vector<std::size_t> return_stack;
+  std::optional<std::size_t> blocking_branch;  // mispredicted branch the front end waits for
+  std::size_t resume_cycle = 0;
+  std::size_t in_flight = 0;
+};
+
+std::size_t units_of(UnitKind unit) {
+  return unit == UnitKind::Alu ? 2U : 1U;
+}
+
+bool pipelined(UnitKind unit) {
+  return unit != UnitKind::Divide;
+}
+
+std::vector<std::size_t> rename_reads(const Usage& usage) {
+  std::vector<std::size_t> slots;
+  for (const auto reg_name : usage.reads) {
+    slots.push_back(mips::isa::register_index(reg_name));
+  }
+  if (usage.reads_hi) {
+    slots.push_back(kHiSlot);
+  }
+  if (usage.reads_lo) {
+    slots.push_back(kLoSlot);
+  }
+  return slots;
+}
+
+std::vector<std::size_t> rename_writes(const Usage& usage) {
+  std::vector<std::size_t> slots;
+  for (const auto reg_name : usage.writes) {
+    slots.push_back(mips::isa::register_index(reg_name));
+  }
+  if (usage.writes_hi) {
+    slots.push_back(kHiSlot);
+  }
+  if (usage.writes_lo) {
+    slots.push_back(kLoSlot);
+  }
+  return slots;
+}
+
+std::int32_t memory_address_of(const DynamicInstruction& dynamic) {
+  return dynamic.memory_address;
+}
+
+// Returns true when the control instruction was mispredicted.
+bool predict_control(
+    const DynamicInstruction& dynamic,
+    PredictorKind predictor_kind,
+    TomasuloThread& thread,
+    RunResult& result,
+    std::vector<std::string>& events) {
+  const auto opcode = dynamic.instruction.opcode;
+  if (dynamic.conditional_branch) {
+    return process_branch_event(dynamic, predictor_kind, thread.predictor, result, events) > 0;
+  }
+  if (opcode == Opcode::Jal) {
+    if (thread.return_stack.size() == kReturnStackDepth) {
+      thread.return_stack.erase(thread.return_stack.begin());
+    }
+    thread.return_stack.push_back(dynamic.pc + 1);
+    return false;
+  }
+  if (opcode == Opcode::Jr) {
+    result.return_predictions += 1;
+    const bool hit = !thread.return_stack.empty() && thread.return_stack.back() == dynamic.next_pc;
+    if (!thread.return_stack.empty()) {
+      thread.return_stack.pop_back();
+    }
+    // The final jr $ra that halts the program has no fetch target to predict.
+    if (dynamic.next_pc == dynamic.pc + 1 && dynamic.sequence + 1 == thread.trace->size()) {
+      return false;
+    }
+    if (!hit) {
+      result.return_mispredictions += 1;
+      events.push_back("ras-miss(" + dynamic.label + ")");
+      return true;
+    }
+    return false;
+  }
+  return false;
+}
+
+RunResult analyze_tomasulo(
+    const std::vector<const std::vector<DynamicInstruction>*>& traces,
+    const RunOptions& options,
+    const RunResult& seed) {
+  RunResult result = seed;
+  std::vector<TomasuloThread> threads(traces.size());
+  std::size_t total_instructions = 0;
+  for (std::size_t index = 0; index < traces.size(); ++index) {
+    threads[index].trace = traces[index];
+    total_instructions += traces[index]->size();
+  }
+  result.executed_instructions = total_instructions;
+
+  std::vector<TomasuloEntry> entries;
+  entries.reserve(total_instructions);
+  std::vector<std::size_t> rob;  // global tags in dispatch order; commit is per-thread in order
+  std::array<std::size_t, kUnitKinds> waiting_in_rs{};
+  std::array<std::vector<std::size_t>, kUnitKinds> unit_busy_until{};
+  for (std::size_t kind = 0; kind < kUnitKinds; ++kind) {
+    unit_busy_until[kind].assign(units_of(static_cast<UnitKind>(kind)), 0);
+  }
+
+  auto source_ready = [&](std::size_t tag, std::size_t cycle) {
+    const auto& producer = entries[tag];
+    return producer.committed || (producer.broadcast && producer.broadcast_cycle < cycle);
+  };
+
+  std::size_t committed_total = 0;
+  std::size_t cycle = 0;
+  const std::size_t width = options.issue_width;
+  const std::size_t cycle_limit = 64 * (total_instructions + 16) * (options.mispredict_penalty + 4);
+
+  while (committed_total < total_instructions) {
+    cycle += 1;
+    if (cycle > cycle_limit) {
+      result.success = false;
+      result.error = "tomasulo model made no progress (internal error)";
+      return result;
+    }
+    std::vector<std::string> events;
+    Packet packet;
+
+    // 1. Commit from the ROB head (oldest first), stores write memory here.
+    std::size_t commits = 0;
+    while (commits < width && !rob.empty()) {
+      auto& head = entries[rob.front()];
+      if (!head.broadcast || head.broadcast_cycle >= cycle) {
+        break;
+      }
+      head.committed = true;
+      auto& thread = threads[head.thread];
+      for (const std::size_t slot : head.destinations) {
+        if (thread.rat[slot] == rob.front()) {
+          thread.rat[slot].reset();
+        }
+      }
+      thread.committed += 1;
+      thread.in_flight -= 1;
+      committed_total += 1;
+      commits += 1;
+      events.push_back("commit(" + head.dynamic->label + (threads.size() > 1 ? "@T" + std::to_string(head.thread) : "") + ")");
+      rob.erase(rob.begin());
+    }
+
+    // 2. Write-back over the common data bus (oldest finished results first).
+    std::size_t broadcasts = 0;
+    for (const std::size_t tag : rob) {
+      auto& entry = entries[tag];
+      if (!entry.finished || entry.broadcast || entry.finish_cycle > cycle) {
+        continue;
+      }
+      if (broadcasts == options.cdb_width) {
+        result.cdb_conflicts += 1;
+        continue;
+      }
+      entry.broadcast = true;
+      entry.broadcast_cycle = cycle;
+      broadcasts += 1;
+      events.push_back("cdb(" + entry.dynamic->label + ")");
+      if (entry.mispredicted) {
+        auto& thread = threads[entry.thread];
+        if (thread.blocking_branch == tag) {
+          thread.blocking_branch.reset();
+          thread.resume_cycle = cycle + options.mispredict_penalty;
+          result.speculative_flush_cycles += options.mispredict_penalty;
+          events.push_back("redirect(" + entry.dynamic->label + ")");
+        }
+      }
+    }
+
+    // 3. Execute: start ready reservation-station entries on free functional units.
+    for (const std::size_t tag : rob) {
+      auto& entry = entries[tag];
+      if (entry.started) {
+        continue;
+      }
+      const bool ready = std::all_of(entry.sources.begin(), entry.sources.end(), [&](std::size_t source) {
+        return source_ready(source, cycle);
+      });
+      if (!ready) {
+        continue;
+      }
+      std::size_t latency = entry.latency;
+      if (entry.is_load) {
+        bool blocked = false;
+        std::optional<std::size_t> forwarding_store;
+        for (const std::size_t older : rob) {
+          if (older == tag) {
+            break;
+          }
+          const auto& other = entries[older];
+          if (other.thread != entry.thread || !other.is_store) {
+            continue;
+          }
+          if (!other.finished || other.finish_cycle > cycle) {
+            blocked = true;  // older store address not yet known
+            break;
+          }
+          if (other.address == entry.address) {
+            forwarding_store = older;
+          }
+        }
+        if (blocked) {
+          continue;
+        }
+        if (forwarding_store.has_value()) {
+          latency = 1;
+          entry.forwarded_load = true;
+        }
+      }
+      auto& units = unit_busy_until[unit_index(entry.unit)];
+      const auto free_unit = std::find_if(units.begin(), units.end(), [&](std::size_t busy) { return busy < cycle; });
+      if (free_unit == units.end()) {
+        result.structural_stalls += 1;
+        continue;
+      }
+      *free_unit = pipelined(entry.unit) ? cycle : cycle + latency - 1;
+      entry.started = true;
+      entry.finished = true;
+      entry.finish_cycle = cycle + latency - 1;
+      waiting_in_rs[unit_index(entry.unit)] -= 1;
+      if (entry.forwarded_load) {
+        result.load_forwards += 1;
+        events.push_back("ex(" + entry.dynamic->label + ",store-forward)");
+      } else {
+        events.push_back("ex(" + entry.dynamic->label + "," + std::string(unit_name(entry.unit)) + ")");
+      }
+    }
+
+    // 4. Dispatch in order into the ROB and reservation stations (ICOUNT order for SMT).
+    std::vector<std::size_t> order(threads.size());
+    for (std::size_t index = 0; index < order.size(); ++index) {
+      order[index] = index;
+    }
+    std::stable_sort(order.begin(), order.end(), [&](std::size_t lhs, std::size_t rhs) {
+      return threads[lhs].in_flight < threads[rhs].in_flight;
+    });
+    std::size_t dispatched = 0;
+    bool rob_stalled = false;
+    bool rs_stalled = false;
+    for (const std::size_t thread_id : order) {
+      auto& thread = threads[thread_id];
+      while (dispatched < width && thread.next < thread.trace->size()) {
+        if (thread.blocking_branch.has_value()) {
+          result.wrong_path_cycles += 1;
+          break;
+        }
+        if (cycle < thread.resume_cycle) {
+          break;
+        }
+        if (rob.size() >= options.rob_entries) {
+          rob_stalled = true;
+          break;
+        }
+        const DynamicInstruction& dynamic = (*thread.trace)[thread.next];
+        const UnitKind unit = unit_for(dynamic.instruction);
+        if (waiting_in_rs[unit_index(unit)] >= options.reservation_stations) {
+          rs_stalled = true;
+          break;
+        }
+        const Usage usage = usage_for(dynamic.instruction);
+        TomasuloEntry entry{
+            .thread = thread_id,
+            .dynamic = &dynamic,
+            .unit = unit,
+            .latency = unit_latency(dynamic.instruction),
+            .sources = {},
+            .destinations = {},
+            .is_load = dynamic.instruction.opcode == Opcode::Lw,
+            .is_store = dynamic.instruction.opcode == Opcode::Sw,
+            .address = memory_address_of(dynamic),
+        };
+        for (const std::size_t slot : rename_reads(usage)) {
+          if (thread.rat[slot].has_value()) {
+            entry.sources.push_back(*thread.rat[slot]);
+          }
+        }
+        const std::size_t tag = entries.size();
+        entry.destinations = rename_writes(usage);
+        for (const std::size_t slot : entry.destinations) {
+          thread.rat[slot] = tag;
+        }
+        if (is_control(dynamic.instruction) &&
+            predict_control(dynamic, options.predictor, thread, result, events)) {
+          entry.mispredicted = true;
+          thread.blocking_branch = tag;
+        }
+        entries.push_back(std::move(entry));
+        rob.push_back(tag);
+        waiting_in_rs[unit_index(unit)] += 1;
+        thread.next += 1;
+        thread.in_flight += 1;
+        dispatched += 1;
+        packet.instructions.push_back(&dynamic);
+        events.push_back("dispatch(" + dynamic.label + (threads.size() > 1 ? "@T" + std::to_string(thread_id) : "") + ")");
+      }
+    }
+    if (rob_stalled) {
+      result.rob_full_stalls += 1;
+      events.push_back("rob-full");
+    }
+    if (rs_stalled) {
+      result.reservation_station_stalls += 1;
+      events.push_back("rs-full");
+    }
+    if (dispatched > 0) {
+      result.issued_packets += 1;
+      result.issued_slots += dispatched;
+    }
+    result.max_rob_occupancy = std::max(result.max_rob_occupancy, rob.size());
+    result.rob_occupancy_sum += rob.size();
+
+    if (options.trace) {
+      result.trace_lines.push_back(trace_line(cycle, SchedulerKind::Tomasulo, width, packet, events, false));
+    }
+  }
+
+  for (const auto& thread : threads) {
+    result.thread_instructions.push_back(thread.committed);
+  }
+  result.cycles = cycle;
+  return result;
+}
+
 }  // namespace
 
 std::string_view scheduler_name(SchedulerKind scheduler) {
@@ -1069,6 +1457,8 @@ std::string_view scheduler_name(SchedulerKind scheduler) {
       return "vliw-lite";
     case SchedulerKind::Scoreboard:
       return "scoreboard";
+    case SchedulerKind::Tomasulo:
+      return "tomasulo";
   }
 
   return "unknown";
@@ -1078,6 +1468,43 @@ RunResult run_program(const LoadedProgram& program, const RunOptions& options) {
   RunResult seed;
   auto trace = execute_trace(program, options, seed);
   if (!seed.success) {
+    return seed;
+  }
+
+  if (options.scheduler == SchedulerKind::Tomasulo) {
+    if (options.issue_width == 0 || options.issue_width > 4) {
+      seed.success = false;
+      seed.error = "tomasulo issue width must be between 1 and 4";
+      return seed;
+    }
+    if (options.rob_entries == 0 || options.reservation_stations == 0 || options.cdb_width == 0) {
+      seed.success = false;
+      seed.error = "tomasulo needs at least one ROB entry, reservation station and CDB slot";
+      return seed;
+    }
+    std::vector<const std::vector<DynamicInstruction>*> traces{&trace};
+    std::vector<DynamicInstruction> smt_trace;
+    std::int32_t smt_exit_code = 0;
+    if (options.smt_program != nullptr) {
+      RunResult smt_seed;
+      smt_trace = execute_trace(*options.smt_program, options, smt_seed);
+      if (!smt_seed.success) {
+        smt_seed.error = "SMT thread 1: " + smt_seed.error;
+        return smt_seed;
+      }
+      smt_exit_code = smt_seed.exit_code;
+      traces.push_back(&smt_trace);
+    }
+    auto result = analyze_tomasulo(traces, options, seed);
+    result.thread_exit_codes.push_back(seed.exit_code);
+    if (options.smt_program != nullptr) {
+      result.thread_exit_codes.push_back(smt_exit_code);
+    }
+    return result;
+  }
+  if (options.smt_program != nullptr) {
+    seed.success = false;
+    seed.error = "SMT requires the tomasulo scheduler";
     return seed;
   }
 

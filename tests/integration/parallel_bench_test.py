@@ -27,7 +27,8 @@ def main() -> int:
         md_path = temp / "parallel_bench.md"
         result = run(
             [
-                str(wrapper),
+                sys.executable,
+                str(repo / "scripts" / "parallel_bench.py"),
                 "--all",
                 "--build-dir",
                 str(bin_dir.parent),

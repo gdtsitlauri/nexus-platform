@@ -1,7 +1,8 @@
 add_library(
   nexus_backend_mips
   STATIC
-    src/codegen.cpp)
+    src/codegen.cpp
+    src/regalloc.cpp)
 
 add_library(Nexus::backend_mips ALIAS nexus_backend_mips)
 

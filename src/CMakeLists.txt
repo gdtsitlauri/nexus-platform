@@ -17,7 +17,10 @@ target_link_libraries(
     nexus_analysis
     nexus_passes
     nexus_backend_mips
-    nexus_mips_assembler)
+    nexus_isa_styles
+    nexus_mips_assembler
+    nexus_mips_loader
+    nexus_sim_functional)
 nexus_apply_project_options(nexusc)
 nexus_set_warnings(nexusc)
 nexus_enable_sanitizers(nexusc)

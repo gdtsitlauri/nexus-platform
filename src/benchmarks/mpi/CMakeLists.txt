@@ -1,7 +1,10 @@
 find_program(NEXUS_MPICXX_EXECUTABLE NAMES mpicxx mpic++)
 if(NOT NEXUS_MPICXX_EXECUTABLE)
-  message(FATAL_ERROR "MPI C++ wrapper (mpicxx/mpic++) was not found.")
+  message(STATUS "MPI C++ wrapper (mpicxx/mpic++) not found; mpi-bench and its test are skipped.")
+  set(NEXUS_HAVE_MPI OFF CACHE INTERNAL "MPI benchmark available")
+  return()
 endif()
+set(NEXUS_HAVE_MPI ON CACHE INTERNAL "MPI benchmark available")
 
 execute_process(
   COMMAND "${NEXUS_MPICXX_EXECUTABLE}" --showme:compile

@@ -21,7 +21,8 @@ def main() -> int:
 
     result = subprocess.run(
         [
-            str(parallel_bench),
+            sys.executable,
+            str(repo_root / "scripts" / "parallel_bench.py"),
             "--gpu",
             "--build-dir",
             str(bin_dir.parent),

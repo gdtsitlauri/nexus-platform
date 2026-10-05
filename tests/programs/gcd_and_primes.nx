@@ -1,0 +1,35 @@
+// Booleans, short-circuit operators, modulo and early returns.
+fn gcd(a: int, b: int) -> int {
+  while (b != 0) {
+    var t: int = a % b;
+    a = b;
+    b = t;
+  }
+  return a;
+}
+
+fn is_prime(n: int) -> bool {
+  if (n < 2) {
+    return false;
+  }
+  var d: int = 2;
+  while (d * d <= n) {
+    if (n % d == 0) {
+      return false;
+    }
+    d = d + 1;
+  }
+  return true;
+}
+
+fn main() -> int {
+  var count: int = 0;
+  var n: int = 0;
+  while (n < 60) {
+    if (is_prime(n) && !(n == 2) || n == 1) {
+      count = count + 1;
+    }
+    n = n + 1;
+  }
+  return count * 10 + gcd(84, 36);
+}

@@ -1,0 +1,20 @@
+// Values that are live across calls must sit in callee-saved registers (or the stack).
+fn fib(n: int) -> int {
+  if (n < 2) {
+    return n;
+  }
+  return fib(n - 1) + fib(n - 2);
+}
+
+fn mix(a: int, b: int, c: int, d: int) -> int {
+  return a * 1000 + b * 100 + c * 10 + d;
+}
+
+fn main() -> int {
+  var x: int = 3;
+  var y: int = 4;
+  var keep: int = x * y + 1;
+  var total: int = fib(x) + fib(y) * fib(x + y) - fib(2);
+  total = total + mix(fib(1), fib(2), fib(3), fib(4)) % 97;
+  return (total + keep) % 256;
+}

@@ -6,6 +6,7 @@
 #include <string>
 #include <unordered_map>
 
+#include "nexus/compiler/backend_mips/regalloc.hpp"
 #include "nexus/mips/assembler_support/printer.hpp"
 #include "nexus/mips/isa/instruction.hpp"
 
@@ -72,12 +73,13 @@ struct LocalStorage {
 struct FrameLayout {
   std::vector<LocalStorage> locals;
   std::vector<int> values;
+  std::vector<int> saved_callee_offsets;
   int saved_fp_offset = 0;
   int saved_ra_offset = 0;
   int frame_size = 0;
 };
 
-FrameLayout build_frame_layout(const Function& function) {
+FrameLayout build_frame_layout(const Function& function, std::size_t callee_saved_count) {
   FrameLayout layout;
   layout.locals.resize(function.locals.size());
   layout.values.resize(function.values.size());
@@ -97,6 +99,11 @@ FrameLayout build_frame_layout(const Function& function) {
     cursor += 4;
   }
 
+  for (std::size_t index = 0; index < callee_saved_count; ++index) {
+    layout.saved_callee_offsets.push_back(cursor);
+    cursor += 4;
+  }
+
   cursor = align_to(cursor, 8);
   layout.saved_fp_offset = cursor;
   layout.saved_ra_offset = cursor + 4;
@@ -106,11 +113,24 @@ FrameLayout build_frame_layout(const Function& function) {
 
 class FunctionEmitter {
  public:
-  explicit FunctionEmitter(const Function& function) : function_(function), frame_(build_frame_layout(function)) {}
+  FunctionEmitter(const Function& function, std::optional<RegisterAllocation> allocation)
+      : function_(function),
+        allocation_(std::move(allocation)),
+        frame_(build_frame_layout(function, allocation_ ? allocation_->used_callee_saved.size() : 0U)) {}
 
   void emit(TextProgram& program) {
     build_labels();
     mips::assembler_support::append_label(program, function_.name);
+    if (allocation_.has_value()) {
+      std::size_t in_registers = 0;
+      for (const auto& interval : allocation_->intervals) {
+        in_registers += interval.reg.has_value() ? 1U : 0U;
+      }
+      mips::assembler_support::append_comment(
+          program,
+          "linear-scan: " + std::to_string(in_registers) + " of " + std::to_string(allocation_->intervals.size()) +
+              " intervals in registers, " + std::to_string(allocation_->spilled) + " spilled");
+    }
     emit_prologue(program);
     emit_blocks(program);
     emit_epilogue(program);
@@ -142,6 +162,15 @@ class FunctionEmitter {
     append_instruction(program, "sw", {reg(Register::RA), mem(frame_.saved_ra_offset, Register::SP)});
     append_instruction(program, "sw", {reg(Register::FP), mem(frame_.saved_fp_offset, Register::SP)});
     append_instruction(program, "or", {reg(Register::FP), reg(Register::SP), reg(Register::Zero)});
+    if (allocation_.has_value()) {
+      for (std::size_t index = 0; index < allocation_->used_callee_saved.size(); ++index) {
+        append_instruction(
+            program,
+            "sw",
+            {reg(allocation_->used_callee_saved[index]), mem(frame_.saved_callee_offsets[index])},
+            "save callee-saved register");
+      }
+    }
 
     for (std::size_t index = 0; index < function_.parameters.size(); ++index) {
       if (index >= 4) {
@@ -151,6 +180,14 @@ class FunctionEmitter {
         return;
       }
       const LocalId local = function_.parameters[index].local;
+      if (const auto home = local_reg(local); home.has_value()) {
+        append_instruction(
+            program,
+            "or",
+            {reg(*home), reg(argument_register(index)), reg(Register::Zero)},
+            "parameter " + function_.parameters[index].name + " lives in a register");
+        continue;
+      }
       append_instruction(
           program,
           "sw",
@@ -177,6 +214,12 @@ class FunctionEmitter {
   void emit_epilogue(TextProgram& program) {
     using namespace mips::assembler_support;
     append_label(program, epilogue_label_);
+    if (allocation_.has_value()) {
+      for (std::size_t index = 0; index < allocation_->used_callee_saved.size(); ++index) {
+        append_instruction(
+            program, "lw", {reg(allocation_->used_callee_saved[index]), mem(frame_.saved_callee_offsets[index])});
+      }
+    }
     append_instruction(program, "lw", {reg(Register::FP), mem(frame_.saved_fp_offset, Register::SP)});
     append_instruction(program, "lw", {reg(Register::RA), mem(frame_.saved_ra_offset, Register::SP)});
     append_instruction(
@@ -186,21 +229,26 @@ class FunctionEmitter {
 
   void emit_instruction(TextProgram& program, const Instruction& instruction) {
     switch (instruction.kind) {
-      case InstructionKind::ConstInt:
-        emit_load_immediate(program, kScratch0, static_cast<std::int32_t>(instruction.int_immediate));
-        store_value(program, *instruction.result, kScratch0);
+      case InstructionKind::ConstInt: {
+        const Register target = result_register(*instruction.result, kScratch0);
+        emit_load_immediate(program, target, static_cast<std::int32_t>(instruction.int_immediate));
+        commit_value(program, *instruction.result, target);
         return;
-      case InstructionKind::ConstBool:
-        emit_load_immediate(program, kScratch0, instruction.bool_immediate ? 1 : 0);
-        store_value(program, *instruction.result, kScratch0);
+      }
+      case InstructionKind::ConstBool: {
+        const Register target = result_register(*instruction.result, kScratch0);
+        emit_load_immediate(program, target, instruction.bool_immediate ? 1 : 0);
+        commit_value(program, *instruction.result, target);
         return;
-      case InstructionKind::LoadLocal:
-        load_local_scalar(program, instruction.local, kScratch0);
-        store_value(program, *instruction.result, kScratch0);
+      }
+      case InstructionKind::LoadLocal: {
+        const Register target = result_register(*instruction.result, kScratch0);
+        load_local_scalar(program, instruction.local, target);
+        commit_value(program, *instruction.result, target);
         return;
+      }
       case InstructionKind::StoreLocal:
-        load_value(program, instruction.operands.front(), kScratch0);
-        store_local_scalar(program, instruction.local, kScratch0);
+        store_local_scalar(program, instruction.local, operand_register(program, instruction.operands.front(), kScratch0));
         return;
       case InstructionKind::LoadElement:
         compute_element_address(program, instruction.local, instruction.operands, kScratch0, kScratch1, kScratch2);
@@ -233,12 +281,13 @@ class FunctionEmitter {
         mips::assembler_support::append_instruction(
             program, "j", {block_labels_.at(terminator.true_target)});
         return;
-      case TerminatorKind::Branch:
-        load_value(program, *terminator.condition, kScratch0);
+      case TerminatorKind::Branch: {
+        const Register condition = operand_register(program, *terminator.condition, kScratch0);
         mips::assembler_support::append_instruction(
-            program, "bne", {reg(kScratch0), reg(Register::Zero), block_labels_.at(terminator.true_target)});
+            program, "bne", {reg(condition), reg(Register::Zero), block_labels_.at(terminator.true_target)});
         mips::assembler_support::append_instruction(program, "j", {block_labels_.at(terminator.false_target)});
         return;
+      }
       case TerminatorKind::Return:
         if (terminator.return_value.has_value()) {
           load_value(program, *terminator.return_value, Register::V0);
@@ -252,88 +301,90 @@ class FunctionEmitter {
   }
 
   void emit_unary(TextProgram& program, const Instruction& instruction) {
-    load_value(program, instruction.operands.front(), kScratch0);
+    const Register source = operand_register(program, instruction.operands.front(), kScratch0);
+    const Register target = result_register(*instruction.result, kScratch1);
     switch (instruction.unary_op) {
       case ir::UnaryOp::Negate:
         mips::assembler_support::append_instruction(
-            program, "sub", {reg(kScratch1), reg(Register::Zero), reg(kScratch0)});
+            program, "sub", {reg(target), reg(Register::Zero), reg(source)});
         break;
       case ir::UnaryOp::LogicalNot:
         mips::assembler_support::append_instruction(
-            program, "xori", {reg(kScratch1), reg(kScratch0), "1"});
+            program, "xori", {reg(target), reg(source), "1"});
         break;
     }
-    store_value(program, *instruction.result, kScratch1);
+    commit_value(program, *instruction.result, target);
   }
 
   void emit_binary(TextProgram& program, const Instruction& instruction) {
-    load_value(program, instruction.operands[0], kScratch0);
-    load_value(program, instruction.operands[1], kScratch1);
+    const Register lhs = operand_register(program, instruction.operands[0], kScratch0);
+    const Register rhs = operand_register(program, instruction.operands[1], kScratch1);
+    const Register target = result_register(*instruction.result, kScratch2);
 
     switch (instruction.binary_op) {
       case BinaryOp::Add:
         mips::assembler_support::append_instruction(
-            program, "addu", {reg(kScratch2), reg(kScratch0), reg(kScratch1)});
+            program, "addu", {reg(target), reg(lhs), reg(rhs)});
         break;
       case BinaryOp::Sub:
         mips::assembler_support::append_instruction(
-            program, "sub", {reg(kScratch2), reg(kScratch0), reg(kScratch1)});
+            program, "sub", {reg(target), reg(lhs), reg(rhs)});
         break;
       case BinaryOp::Mul:
-        mips::assembler_support::append_instruction(program, "mult", {reg(kScratch0), reg(kScratch1)});
-        mips::assembler_support::append_instruction(program, "mflo", {reg(kScratch2)});
+        mips::assembler_support::append_instruction(program, "mult", {reg(lhs), reg(rhs)});
+        mips::assembler_support::append_instruction(program, "mflo", {reg(target)});
         break;
       case BinaryOp::Div:
-        mips::assembler_support::append_instruction(program, "div", {reg(kScratch0), reg(kScratch1)});
-        mips::assembler_support::append_instruction(program, "mflo", {reg(kScratch2)});
+        mips::assembler_support::append_instruction(program, "div", {reg(lhs), reg(rhs)});
+        mips::assembler_support::append_instruction(program, "mflo", {reg(target)});
         break;
       case BinaryOp::Mod:
-        mips::assembler_support::append_instruction(program, "div", {reg(kScratch0), reg(kScratch1)});
-        mips::assembler_support::append_instruction(program, "mfhi", {reg(kScratch2)});
+        mips::assembler_support::append_instruction(program, "div", {reg(lhs), reg(rhs)});
+        mips::assembler_support::append_instruction(program, "mfhi", {reg(target)});
         break;
       case BinaryOp::Less:
         mips::assembler_support::append_instruction(
-            program, "slt", {reg(kScratch2), reg(kScratch0), reg(kScratch1)});
+            program, "slt", {reg(target), reg(lhs), reg(rhs)});
         break;
       case BinaryOp::LessEqual:
         mips::assembler_support::append_instruction(
-            program, "slt", {reg(kScratch2), reg(kScratch1), reg(kScratch0)});
+            program, "slt", {reg(target), reg(rhs), reg(lhs)});
         mips::assembler_support::append_instruction(
-            program, "xori", {reg(kScratch2), reg(kScratch2), "1"});
+            program, "xori", {reg(target), reg(target), "1"});
         break;
       case BinaryOp::Greater:
         mips::assembler_support::append_instruction(
-            program, "slt", {reg(kScratch2), reg(kScratch1), reg(kScratch0)});
+            program, "slt", {reg(target), reg(rhs), reg(lhs)});
         break;
       case BinaryOp::GreaterEqual:
         mips::assembler_support::append_instruction(
-            program, "slt", {reg(kScratch2), reg(kScratch0), reg(kScratch1)});
+            program, "slt", {reg(target), reg(lhs), reg(rhs)});
         mips::assembler_support::append_instruction(
-            program, "xori", {reg(kScratch2), reg(kScratch2), "1"});
+            program, "xori", {reg(target), reg(target), "1"});
         break;
       case BinaryOp::Equal:
         mips::assembler_support::append_instruction(
-            program, "xor", {reg(kScratch2), reg(kScratch0), reg(kScratch1)});
+            program, "xor", {reg(target), reg(lhs), reg(rhs)});
         mips::assembler_support::append_instruction(
-            program, "sltiu", {reg(kScratch2), reg(kScratch2), "1"});
+            program, "sltiu", {reg(target), reg(target), "1"});
         break;
       case BinaryOp::NotEqual:
         mips::assembler_support::append_instruction(
-            program, "xor", {reg(kScratch2), reg(kScratch0), reg(kScratch1)});
+            program, "xor", {reg(target), reg(lhs), reg(rhs)});
         mips::assembler_support::append_instruction(
-            program, "sltu", {reg(kScratch2), reg(Register::Zero), reg(kScratch2)});
+            program, "sltu", {reg(target), reg(Register::Zero), reg(target)});
         break;
       case BinaryOp::LogicalAnd:
         mips::assembler_support::append_instruction(
-            program, "and", {reg(kScratch2), reg(kScratch0), reg(kScratch1)});
+            program, "and", {reg(target), reg(lhs), reg(rhs)});
         break;
       case BinaryOp::LogicalOr:
         mips::assembler_support::append_instruction(
-            program, "or", {reg(kScratch2), reg(kScratch0), reg(kScratch1)});
+            program, "or", {reg(target), reg(lhs), reg(rhs)});
         break;
     }
 
-    store_value(program, *instruction.result, kScratch2);
+    commit_value(program, *instruction.result, target);
   }
 
   void emit_call(TextProgram& program, const Instruction& instruction) {
@@ -378,22 +429,72 @@ class FunctionEmitter {
     }
   }
 
+  [[nodiscard]] std::optional<Register> value_reg(ValueId value) const {
+    return allocation_.has_value() ? allocation_->value_regs[value] : std::nullopt;
+  }
+
+  [[nodiscard]] std::optional<Register> local_reg(LocalId local) const {
+    return allocation_.has_value() ? allocation_->local_regs[local] : std::nullopt;
+  }
+
+  static void emit_move(TextProgram& program, Register target, Register source) {
+    if (target != source) {
+      mips::assembler_support::append_instruction(program, "or", {reg(target), reg(source), reg(Register::Zero)});
+    }
+  }
+
+  // Register that holds `value`: its allocated home, or `scratch` after a reload from the frame.
+  Register operand_register(TextProgram& program, ValueId value, Register scratch) {
+    if (const auto home = value_reg(value); home.has_value()) {
+      return *home;
+    }
+    load_value(program, value, scratch);
+    return scratch;
+  }
+
+  // Register an instruction should write `value` into; spilled values go through `scratch`.
+  [[nodiscard]] Register result_register(ValueId value, Register scratch) const {
+    return value_reg(value).value_or(scratch);
+  }
+
+  void commit_value(TextProgram& program, ValueId value, Register source) {
+    if (!value_reg(value).has_value()) {
+      store_value(program, value, source);
+    }
+  }
+
   void load_value(TextProgram& program, ValueId value, Register target) {
+    if (const auto home = value_reg(value); home.has_value()) {
+      emit_move(program, target, *home);
+      return;
+    }
     mips::assembler_support::append_instruction(
         program, "lw", {reg(target), mem(frame_.values[value])});
   }
 
   void store_value(TextProgram& program, ValueId value, Register source) {
+    if (const auto home = value_reg(value); home.has_value()) {
+      emit_move(program, *home, source);
+      return;
+    }
     mips::assembler_support::append_instruction(
         program, "sw", {reg(source), mem(frame_.values[value])});
   }
 
   void load_local_scalar(TextProgram& program, LocalId local, Register target) {
+    if (const auto home = local_reg(local); home.has_value()) {
+      emit_move(program, target, *home);
+      return;
+    }
     mips::assembler_support::append_instruction(
         program, "lw", {reg(target), mem(frame_.locals[local].offset)});
   }
 
   void store_local_scalar(TextProgram& program, LocalId local, Register source) {
+    if (const auto home = local_reg(local); home.has_value()) {
+      emit_move(program, *home, source);
+      return;
+    }
     mips::assembler_support::append_instruction(
         program, "sw", {reg(source), mem(frame_.locals[local].offset)});
   }
@@ -439,6 +540,18 @@ class FunctionEmitter {
           program, "addu", {reg(scratch0), reg(scratch0), reg(scratch1)});
     }
 
+    // A partial index (e.g. passing row grid[i] of int[3][4]) selects a sub-array: scale the
+    // combined index by the number of elements in that sub-array.
+    std::int64_t sub_array_words = 1;
+    for (std::size_t dimension = indices.size(); dimension < type.array_extents.size(); ++dimension) {
+      sub_array_words *= type.array_extents[dimension];
+    }
+    if (sub_array_words != 1) {
+      emit_load_immediate(program, scratch1, static_cast<std::int32_t>(sub_array_words));
+      mips::assembler_support::append_instruction(program, "mult", {reg(scratch0), reg(scratch1)});
+      mips::assembler_support::append_instruction(program, "mflo", {reg(scratch0)});
+    }
+
     mips::assembler_support::append_instruction(program, "sll", {reg(scratch0), reg(scratch0), "2"});
     mips::assembler_support::append_instruction(
         program, "addu", {reg(target), reg(target), reg(scratch0)});
@@ -470,6 +583,7 @@ class FunctionEmitter {
   }
 
   const Function& function_;
+  std::optional<RegisterAllocation> allocation_;
   FrameLayout frame_;
   std::unordered_map<BlockId, std::string> block_labels_;
   std::string epilogue_label_;
@@ -478,11 +592,15 @@ class FunctionEmitter {
 
 }  // namespace
 
-CodegenResult lower_module(const ir::Module& module) {
+CodegenResult lower_module(const ir::Module& module, const CodegenOptions& options) {
   CodegenResult result;
   TextProgram program;
   for (std::size_t index = 0; index < module.functions.size(); ++index) {
-    FunctionEmitter emitter(module.functions[index]);
+    std::optional<RegisterAllocation> allocation;
+    if (options.register_allocation == RegisterAllocationMode::LinearScan) {
+      allocation = allocate_registers_linear_scan(module.functions[index]);
+    }
+    FunctionEmitter emitter(module.functions[index], std::move(allocation));
     emitter.emit(program);
     result.diagnostics.insert(
         result.diagnostics.end(), emitter.diagnostics().begin(), emitter.diagnostics().end());

@@ -16,6 +16,7 @@ struct TextLine {
   bool blank = false;
   std::string label;
   std::optional<TextInstruction> instruction;
+  std::string comment;
 };
 
 struct TextProgram {
@@ -24,6 +25,7 @@ struct TextProgram {
 
 void append_blank_line(TextProgram& program);
 void append_label(TextProgram& program, const std::string& label);
+void append_comment(TextProgram& program, const std::string& comment);
 void append_instruction(
     TextProgram& program,
     const std::string& opcode,

@@ -1,0 +1,33 @@
+// Passing one row of a 2-D array (a partial index) by reference.
+fn row_sum(row: int[4]) -> int {
+  var total: int = 0;
+  var k: int = 0;
+  while (k < 4) {
+    total = total + row[k];
+    k = k + 1;
+  }
+  return total;
+}
+
+fn scale_row(row: int[4], factor: int) -> void {
+  var k: int = 0;
+  while (k < 4) {
+    row[k] = row[k] * factor;
+    k = k + 1;
+  }
+}
+
+fn main() -> int {
+  var grid: int[3][4];
+  var i: int = 0;
+  while (i < 3) {
+    var j: int = 0;
+    while (j < 4) {
+      grid[i][j] = i * 10 + j;
+      j = j + 1;
+    }
+    i = i + 1;
+  }
+  scale_row(grid[2], 2);
+  return row_sum(grid[0]) + row_sum(grid[1]) * 2 + row_sum(grid[2]);
+}

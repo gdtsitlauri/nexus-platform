@@ -1,4 +1,5 @@
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <optional>
 #include <sstream>
@@ -15,6 +16,7 @@
 #include "nexus/compiler/analysis/symbolic.hpp"
 #include "nexus/compiler/analysis/alias_analysis.hpp"
 #include "nexus/compiler/backend_mips/codegen.hpp"
+#include "nexus/compiler/backend_mips/regalloc.hpp"
 #include "nexus/compiler/experimental_parallel_parsing/bison_lr.hpp"
 #include "nexus/compiler/experimental_parallel_parsing/prototype.hpp"
 #include "nexus/compiler/frontend/ast_printer.hpp"
@@ -22,12 +24,15 @@
 #include "nexus/compiler/frontend/lexer.hpp"
 #include "nexus/compiler/frontend/parser.hpp"
 #include "nexus/compiler/ir/lowering.hpp"
+#include "nexus/compiler/isa_styles/isa_styles.hpp"
 #include "nexus/compiler/ir/printer.hpp"
 #include "nexus/compiler/passes/interprocedural_pass.hpp"
 #include "nexus/compiler/passes/affine_stripmine.hpp"
 #include "nexus/compiler/passes/loop_unroll.hpp"
 #include "nexus/compiler/semantics/semantic_analyzer.hpp"
 #include "nexus/mips/assembler_support/printer.hpp"
+#include "nexus/mips/loader/parser.hpp"
+#include "nexus/sim/functional/interpreter.hpp"
 
 namespace {
 
@@ -47,11 +52,14 @@ void print_usage(std::ostream& stream) {
          << "  nexusc cfg <file>\n"
          << "  nexusc dom <file>\n"
          << "  nexusc analysis liveness <file>\n"
+         << "  nexusc analysis regalloc <file>\n"
          << "  nexusc experimental-parse <file> --mode parallel|bison-lr\n"
          << "  nexusc opt <file> --analysis symbolic|region-liveness|affine|alias|interproc\n"
          << "  nexusc opt <file> --pass unroll|unroll-symbolic|strip-mine|interproc-constfold\n"
          << "  nexusc compile <file> -S [-o out.s]\n"
-         << "  nexusc compile <file> --emit-ir\n";
+         << "  nexusc compile <file> -S --regalloc none|linear-scan [-o out.s]\n"
+         << "  nexusc compile <file> --emit-ir\n"
+         << "  nexusc isa <file> [--style stack|accumulator|register-memory|all] [--listing]\n";
 }
 
 bool load_source_file(const std::string& file_name, LoadedSource& loaded_source) {
@@ -118,8 +126,10 @@ int print_backend_diagnostics(const std::vector<std::string>& diagnostics) {
   return diagnostics.empty() ? 0 : 1;
 }
 
-std::optional<std::string> lower_to_assembly_text(const nexus::compiler::ir::Module& module) {
-  const auto backend_result = nexus::compiler::backend_mips::lower_module(module);
+std::optional<std::string> lower_to_assembly_text(
+    const nexus::compiler::ir::Module& module,
+    const nexus::compiler::backend_mips::CodegenOptions& codegen_options = {}) {
+  const auto backend_result = nexus::compiler::backend_mips::lower_module(module, codegen_options);
   if (!backend_result.diagnostics.empty()) {
     print_backend_diagnostics(backend_result.diagnostics);
     return std::nullopt;
@@ -264,6 +274,11 @@ int run_analysis(const LoadedSource& loaded_source, const std::string& analysis_
       std::cout << nexus::compiler::analysis::print_liveness(module->functions[index], cfg, live);
       continue;
     }
+    if (analysis_name == "regalloc") {
+      const auto allocation = nexus::compiler::backend_mips::allocate_registers_linear_scan(module->functions[index]);
+      std::cout << nexus::compiler::backend_mips::print_register_allocation(module->functions[index], allocation);
+      continue;
+    }
     if (analysis_name == "symbolic") {
       const auto cfg = nexus::compiler::analysis::build_cfg(module->functions[index]);
       const auto symbolic = nexus::compiler::analysis::analyze_symbolic(module->functions[index], cfg);
@@ -384,10 +399,129 @@ int run_opt(const LoadedSource& loaded_source, const OptOptions& options) {
   return 1;
 }
 
+struct IsaRow {
+  std::string name;
+  std::int32_t exit_code = 0;
+  std::size_t static_instructions = 0;
+  std::size_t code_bytes = 0;
+  std::size_t dynamic_instructions = 0;
+  std::size_t memory_reads = 0;
+  std::size_t memory_writes = 0;
+  std::string note;
+};
+
+std::optional<IsaRow> run_mips_row(
+    const nexus::compiler::ir::Module& module,
+    nexus::compiler::backend_mips::RegisterAllocationMode mode,
+    const std::string& name) {
+  const auto assembly = lower_to_assembly_text(module, {.register_allocation = mode});
+  if (!assembly.has_value()) {
+    return std::nullopt;
+  }
+  const auto loaded = nexus::mips::loader::load_program_from_text(*assembly);
+  if (!loaded.diagnostics.empty() || !loaded.program.has_value()) {
+    std::cerr << "error: generated MIPS failed to load\n";
+    return std::nullopt;
+  }
+  const auto run = nexus::sim::functional::run_program(*loaded.program, {.trace = true, .max_instructions = 5'000'000});
+  if (!run.success) {
+    std::cerr << "error: MIPS run failed: " << run.error << '\n';
+    return std::nullopt;
+  }
+  IsaRow row;
+  row.name = name;
+  row.exit_code = run.exit_code;
+  row.static_instructions = loaded.program->instructions.size();
+  row.code_bytes = 4 * row.static_instructions;
+  row.dynamic_instructions = run.executed_instructions;
+  for (const auto& line : run.trace_lines) {
+    row.memory_reads += line.find(" lw ") != std::string::npos ? 1U : 0U;
+    row.memory_writes += line.find(" sw ") != std::string::npos ? 1U : 0U;
+  }
+  return row;
+}
+
+int run_isa(const LoadedSource& loaded_source, const std::string& style_name, bool listing) {
+  using nexus::compiler::isa_styles::IsaStyle;
+  const auto checked_program = parse_and_check(loaded_source);
+  if (!checked_program.has_value()) {
+    return 1;
+  }
+  const auto module = lower_checked_program(loaded_source, *checked_program->program);
+  if (!module.has_value()) {
+    return 1;
+  }
+
+  std::vector<IsaStyle> styles;
+  if (style_name == "all") {
+    styles = {IsaStyle::Stack, IsaStyle::Accumulator, IsaStyle::RegisterMemory};
+  } else if (style_name == "stack") {
+    styles = {IsaStyle::Stack};
+  } else if (style_name == "accumulator") {
+    styles = {IsaStyle::Accumulator};
+  } else if (style_name == "register-memory") {
+    styles = {IsaStyle::RegisterMemory};
+  } else {
+    std::cerr << "error: unknown ISA style '" << style_name << "'\n";
+    return 1;
+  }
+
+  std::vector<IsaRow> rows;
+  for (const IsaStyle style : styles) {
+    const auto result = nexus::compiler::isa_styles::compile_and_run(*module, style);
+    if (listing) {
+      std::cout << "== " << nexus::compiler::isa_styles::isa_style_name(style) << " listing ==\n"
+                << result.program.listing << '\n';
+    }
+    if (!result.run.success) {
+      std::cerr << "error: " << nexus::compiler::isa_styles::isa_style_name(style) << " run failed: " << result.run.error
+                << '\n';
+      return 1;
+    }
+    IsaRow row{
+        .name = std::string(nexus::compiler::isa_styles::isa_style_name(style)),
+        .exit_code = result.run.exit_code,
+        .static_instructions = result.program.static_instructions,
+        .code_bytes = result.program.code_bytes,
+        .dynamic_instructions = result.run.dynamic_instructions,
+        .memory_reads = result.run.memory_reads,
+        .memory_writes = result.run.memory_writes,
+        .note = style == IsaStyle::Stack ? "max operand stack " + std::to_string(result.run.max_operand_stack) : "",
+    };
+    rows.push_back(row);
+  }
+  if (style_name == "all") {
+    using nexus::compiler::backend_mips::RegisterAllocationMode;
+    for (const auto& [mode, name] : {std::pair{RegisterAllocationMode::StackOnly, "load-store (MIPS)"},
+                                     std::pair{RegisterAllocationMode::LinearScan, "load-store (MIPS+regalloc)"}}) {
+      const auto row = run_mips_row(*module, mode, name);
+      if (!row.has_value()) {
+        return 1;
+      }
+      rows.push_back(*row);
+    }
+  }
+
+  std::cout << "ISA comparison for " << loaded_source.file_name << ":\n";
+  std::cout << std::left << std::setw(28) << "style" << std::right << std::setw(6) << "exit" << std::setw(9) << "static"
+            << std::setw(8) << "bytes" << std::setw(10) << "dynamic" << std::setw(9) << "reads" << std::setw(9)
+            << "writes" << "  notes\n";
+  bool agree = true;
+  for (const auto& row : rows) {
+    std::cout << std::left << std::setw(28) << row.name << std::right << std::setw(6) << row.exit_code << std::setw(9)
+              << row.static_instructions << std::setw(8) << row.code_bytes << std::setw(10) << row.dynamic_instructions
+              << std::setw(9) << row.memory_reads << std::setw(9) << row.memory_writes << "  " << row.note << '\n';
+    agree = agree && row.exit_code == rows.front().exit_code;
+  }
+  std::cout << (agree ? "All ISA styles agree on the program result.\n" : "ISA styles DISAGREE on the program result.\n");
+  return agree ? 0 : 1;
+}
+
 struct CompileOptions {
   bool emit_ir = false;
   bool emit_assembly = false;
   std::optional<std::string> output_file;
+  nexus::compiler::backend_mips::CodegenOptions codegen{};
 };
 
 int run_compile(const LoadedSource& loaded_source, const CompileOptions& options) {
@@ -406,7 +540,7 @@ int run_compile(const LoadedSource& loaded_source, const CompileOptions& options
     return 0;
   }
 
-  const auto assembly = lower_to_assembly_text(*module);
+  const auto assembly = lower_to_assembly_text(*module, options.codegen);
   if (!assembly.has_value()) {
     return 1;
   }
@@ -495,6 +629,31 @@ int main(int argc, char** argv) {
     return run_opt(loaded_source, options);
   }
 
+  if (command == "isa") {
+    if (argc < 3) {
+      print_usage(std::cerr);
+      return 1;
+    }
+    LoadedSource loaded_source;
+    if (!load_source_file(argv[2], loaded_source)) {
+      return 1;
+    }
+    std::string style = "all";
+    bool listing = false;
+    for (int index = 3; index < argc; ++index) {
+      const std::string option = argv[index];
+      if (option == "--style" && index + 1 < argc) {
+        style = argv[++index];
+      } else if (option == "--listing") {
+        listing = true;
+      } else {
+        std::cerr << "error: unknown isa option '" << option << "'\n";
+        return 1;
+      }
+    }
+    return run_isa(loaded_source, style, listing);
+  }
+
   if (command == "compile") {
     if (argc < 3) {
       print_usage(std::cerr);
@@ -515,6 +674,22 @@ int main(int argc, char** argv) {
       }
       if (option == "-S") {
         options.emit_assembly = true;
+        continue;
+      }
+      if (option == "--regalloc") {
+        if (index + 1 >= argc) {
+          std::cerr << "error: missing mode after --regalloc\n";
+          return 1;
+        }
+        const std::string mode = argv[++index];
+        if (mode == "linear-scan") {
+          options.codegen.register_allocation = nexus::compiler::backend_mips::RegisterAllocationMode::LinearScan;
+        } else if (mode == "none") {
+          options.codegen.register_allocation = nexus::compiler::backend_mips::RegisterAllocationMode::StackOnly;
+        } else {
+          std::cerr << "error: unknown --regalloc mode '" << mode << "', expected 'none' or 'linear-scan'\n";
+          return 1;
+        }
         continue;
       }
       if (option == "-o") {

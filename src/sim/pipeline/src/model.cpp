@@ -53,6 +53,10 @@ struct IDEXRegister {
   std::size_t predicted_target = 0;
   std::size_t fallthrough_pc = 0;
   std::string label;
+  // Set when the instruction is held in ID/EX by a memory freeze or load interlock.  While it
+  // waits, older producers drain through write-back and leave the forwarding window, so the held
+  // instruction must re-read the register file before it finally executes.
+  bool held = false;
 };
 
 struct EXMEMRegister {
@@ -826,6 +830,12 @@ RunResult run_program(const LoadedProgram& program, const RunOptions& options) {
       }
     }
 
+    if (id_ex.valid && id_ex.held) {
+      id_ex.rs_value = state.regs[mips::isa::register_index(id_ex.instruction.rs)];
+      id_ex.rt_value = state.regs[mips::isa::register_index(id_ex.instruction.rt)];
+      id_ex.held = false;
+    }
+
     const auto tick = memory_system.tick(cycle);
     if (!tick.error.empty()) {
       result.error = tick.error;
@@ -868,17 +878,6 @@ RunResult run_program(const LoadedProgram& program, const RunOptions& options) {
     bool memory_freeze = false;
     bool completed_load_interlock = false;
     bool suppress_fetch = drain_for_interrupt;
-
-    if (!memory_freeze && id_ex.valid && is_load(id_ex.instruction)) {
-      const auto load_dest = destination_register(id_ex.instruction);
-      if (load_dest.has_value() && *load_dest != Register::Zero && if_id.valid &&
-          uses_register(if_id.instruction, *load_dest)) {
-        stall = true;
-        stalled_on = *load_dest;
-        result.stall_cycles += 1;
-        result.load_use_stalls += 1;
-      }
-    }
 
     MEMWBRegister next_mem_wb;
     EXMEMRegister next_ex_mem = ex_mem;
@@ -961,6 +960,20 @@ RunResult run_program(const LoadedProgram& program, const RunOptions& options) {
       events.push_back(load_use_event(*next_mem_wb.destination));
     }
 
+    // The load-use interlock is only evaluated when the back end is not frozen by a multi-cycle
+    // memory access.  Otherwise the stall path below would overwrite the frozen EX/MEM register
+    // (the access in flight would be lost, e.g. a store silently dropped under cache misses).
+    if (!memory_freeze && !completed_load_interlock && id_ex.valid && is_load(id_ex.instruction)) {
+      const auto load_dest = destination_register(id_ex.instruction);
+      if (load_dest.has_value() && *load_dest != Register::Zero && if_id.valid &&
+          uses_register(if_id.instruction, *load_dest)) {
+        stall = true;
+        stalled_on = *load_dest;
+        result.stall_cycles += 1;
+        result.load_use_stalls += 1;
+      }
+    }
+
     ExecuteOutcome execute;
     if (!memory_freeze && !completed_load_interlock) {
       execute = execute_stage(id_ex, ex_mem, mem_wb, state, interrupt_in_service, result);
@@ -988,6 +1001,7 @@ RunResult run_program(const LoadedProgram& program, const RunOptions& options) {
       next_id_ex = decode_if_id(if_id, state);
     } else if (memory_freeze || completed_load_interlock) {
       next_id_ex = id_ex;
+      next_id_ex.held = next_id_ex.valid;
     }
 
     IFIDRegister next_if_id;

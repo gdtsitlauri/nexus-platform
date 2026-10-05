@@ -1,4 +1,10 @@
-find_package(OpenMP REQUIRED)
+find_package(OpenMP QUIET)
+if(NOT OpenMP_CXX_FOUND)
+  message(STATUS "OpenMP not found; openmp-bench and its test are skipped.")
+  set(NEXUS_HAVE_OPENMP OFF CACHE INTERNAL "OpenMP benchmark available")
+  return()
+endif()
+set(NEXUS_HAVE_OPENMP ON CACHE INTERNAL "OpenMP benchmark available")
 
 add_executable(openmp_bench "${PROJECT_SOURCE_DIR}/benchmarks/openmp/openmp_bench.cpp")
 set_target_properties(openmp_bench PROPERTIES OUTPUT_NAME "openmp-bench")

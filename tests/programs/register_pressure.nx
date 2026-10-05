@@ -1,0 +1,48 @@
+// Twenty scalars stay live at once: more than the 14 allocatable registers, so linear scan must spill.
+fn main() -> int {
+  var a: int = 1;
+  var b: int = 2;
+  var c: int = 3;
+  var d: int = 4;
+  var e: int = 5;
+  var f: int = 6;
+  var g: int = 7;
+  var h: int = 8;
+  var i: int = 9;
+  var j: int = 10;
+  var k: int = 11;
+  var l: int = 12;
+  var m: int = 13;
+  var n: int = 14;
+  var o: int = 15;
+  var p: int = 16;
+  var q: int = 17;
+  var r: int = 18;
+  var s: int = 19;
+  var t: int = 20;
+  var round: int = 0;
+  while (round < 5) {
+    a = a + t;
+    b = b + a;
+    c = c + b;
+    d = d + c;
+    e = e + d % 7;
+    f = f + e % 5;
+    g = g + f % 3;
+    h = h + g % 11;
+    i = i + h % 13;
+    j = j + i % 17;
+    k = k + j % 19;
+    l = l + k % 23;
+    m = m + l % 29;
+    n = n + m % 31;
+    o = o + n % 37;
+    p = p + o % 41;
+    q = q + p % 43;
+    r = r + q % 47;
+    s = s + r % 53;
+    t = t + s % 59;
+    round = round + 1;
+  }
+  return (a + b + c + d + e + f + g + h + i + j + k + l + m + n + o + p + q + r + s + t) % 251;
+}

@@ -1,0 +1,14 @@
+// Deep recursion with two parameters and nested calls as arguments.
+fn ack(m: int, n: int) -> int {
+  if (m == 0) {
+    return n + 1;
+  }
+  if (n == 0) {
+    return ack(m - 1, 1);
+  }
+  return ack(m - 1, ack(m, n - 1));
+}
+
+fn main() -> int {
+  return ack(2, 3) * 10 + ack(1, 4);
+}

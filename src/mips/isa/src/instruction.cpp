@@ -12,9 +12,11 @@ struct RegisterEntry {
   std::string_view name;
 };
 
-constexpr std::array<RegisterEntry, 15> kRegisters = {{
+constexpr std::array<RegisterEntry, 32> kRegisters = {{
     {Register::Zero, "$zero"},
+    {Register::AT, "$at"},
     {Register::V0, "$v0"},
+    {Register::V1, "$v1"},
     {Register::A0, "$a0"},
     {Register::A1, "$a1"},
     {Register::A2, "$a2"},
@@ -27,49 +29,32 @@ constexpr std::array<RegisterEntry, 15> kRegisters = {{
     {Register::T5, "$t5"},
     {Register::T6, "$t6"},
     {Register::T7, "$t7"},
+    {Register::S0, "$s0"},
+    {Register::S1, "$s1"},
+    {Register::S2, "$s2"},
+    {Register::S3, "$s3"},
+    {Register::S4, "$s4"},
+    {Register::S5, "$s5"},
+    {Register::S6, "$s6"},
+    {Register::S7, "$s7"},
+    {Register::T8, "$t8"},
+    {Register::T9, "$t9"},
+    {Register::K0, "$k0"},
+    {Register::K1, "$k1"},
+    {Register::GP, "$gp"},
     {Register::SP, "$sp"},
+    {Register::FP, "$fp"},
+    {Register::RA, "$ra"},
 }};
 
 }  // namespace
 
 std::string_view register_name(Register reg) {
-  switch (reg) {
-    case Register::Zero:
-      return "$zero";
-    case Register::V0:
-      return "$v0";
-    case Register::A0:
-      return "$a0";
-    case Register::A1:
-      return "$a1";
-    case Register::A2:
-      return "$a2";
-    case Register::A3:
-      return "$a3";
-    case Register::T0:
-      return "$t0";
-    case Register::T1:
-      return "$t1";
-    case Register::T2:
-      return "$t2";
-    case Register::T3:
-      return "$t3";
-    case Register::T4:
-      return "$t4";
-    case Register::T5:
-      return "$t5";
-    case Register::T6:
-      return "$t6";
-    case Register::T7:
-      return "$t7";
-    case Register::SP:
-      return "$sp";
-    case Register::FP:
-      return "$fp";
-    case Register::RA:
-      return "$ra";
+  for (const auto& entry : kRegisters) {
+    if (entry.reg == reg) {
+      return entry.name;
+    }
   }
-
   return "$invalid";
 }
 
@@ -79,11 +64,8 @@ std::optional<Register> parse_register(std::string_view name) {
       return entry.reg;
     }
   }
-  if (name == "$fp") {
+  if (name == "$s8") {
     return Register::FP;
-  }
-  if (name == "$ra") {
-    return Register::RA;
   }
   return std::nullopt;
 }

@@ -15,15 +15,19 @@ add_test(
   COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/audit_phase1.py"
           "${PROJECT_SOURCE_DIR}")
 
-add_test(NAME nexus_hdl_adder COMMAND "${PROJECT_SOURCE_DIR}/scripts/test_hdl.sh" adder)
-add_test(NAME nexus_hdl_alu COMMAND "${PROJECT_SOURCE_DIR}/scripts/test_hdl.sh" alu)
-add_test(NAME nexus_hdl_multiplier COMMAND "${PROJECT_SOURCE_DIR}/scripts/test_hdl.sh" multiplier)
-add_test(NAME nexus_hdl_divider COMMAND "${PROJECT_SOURCE_DIR}/scripts/test_hdl.sh" divider)
-add_test(NAME nexus_hdl_register_file COMMAND "${PROJECT_SOURCE_DIR}/scripts/test_hdl.sh" register-file)
-add_test(NAME nexus_hdl_control COMMAND "${PROJECT_SOURCE_DIR}/scripts/test_hdl.sh" control)
-add_test(NAME nexus_hdl_pipeline_reg COMMAND "${PROJECT_SOURCE_DIR}/scripts/test_hdl.sh" pipeline-reg)
-add_test(NAME nexus_hdl_cpu_slice COMMAND "${PROJECT_SOURCE_DIR}/scripts/test_hdl.sh" cpu-slice)
-add_test(NAME nexus_hdl_all COMMAND "${PROJECT_SOURCE_DIR}/scripts/test_hdl.sh" all)
+add_test(NAME nexus_hdl_adder COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/test_hdl.py" adder)
+add_test(NAME nexus_hdl_alu COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/test_hdl.py" alu)
+add_test(NAME nexus_hdl_multiplier COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/test_hdl.py" multiplier)
+add_test(NAME nexus_hdl_divider COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/test_hdl.py" divider)
+add_test(NAME nexus_hdl_register_file COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/test_hdl.py" register-file)
+add_test(NAME nexus_hdl_control COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/test_hdl.py" control)
+add_test(NAME nexus_hdl_pipeline_reg COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/test_hdl.py" pipeline-reg)
+add_test(NAME nexus_hdl_cpu_slice COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/test_hdl.py" cpu-slice)
+add_test(NAME nexus_hdl_all COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/test_hdl.py" all)
+set_tests_properties(
+  nexus_hdl_adder nexus_hdl_alu nexus_hdl_multiplier nexus_hdl_divider nexus_hdl_register_file
+  nexus_hdl_control nexus_hdl_pipeline_reg nexus_hdl_cpu_slice nexus_hdl_all
+  PROPERTIES SKIP_RETURN_CODE 77)
 
 add_test(
   NAME nexus_phase10_cli
@@ -59,7 +63,9 @@ add_test(
     "${PROJECT_SOURCE_DIR}/tests/integration/toolchain_compare_test.py"
     "$<TARGET_FILE:nexusc>"
     "${PROJECT_SOURCE_DIR}")
+set_tests_properties(nexus_toolchain_compare PROPERTIES SKIP_RETURN_CODE 77)
 
+if(NEXUS_HAVE_OPENMP)
 add_test(
   NAME nexus_openmp_benchmark
   COMMAND
@@ -68,7 +74,9 @@ add_test(
     openmp
     "$<TARGET_FILE_DIR:mips_sim>"
     "${PROJECT_SOURCE_DIR}")
+endif()
 
+if(NEXUS_HAVE_MPI)
 add_test(
   NAME nexus_mpi_benchmark
   COMMAND
@@ -77,6 +85,7 @@ add_test(
     mpi
     "$<TARGET_FILE_DIR:mips_sim>"
     "${PROJECT_SOURCE_DIR}")
+endif()
 
 add_test(
   NAME nexus_simd_benchmark
@@ -87,6 +96,7 @@ add_test(
     "$<TARGET_FILE_DIR:mips_sim>"
     "${PROJECT_SOURCE_DIR}")
 
+if(NEXUS_HAVE_OPENMP AND NEXUS_HAVE_MPI)
 add_test(
   NAME nexus_bench_wrapper_phase10
   COMMAND
@@ -94,6 +104,7 @@ add_test(
     "${PROJECT_SOURCE_DIR}/tests/integration/parallel_bench_test.py"
     "$<TARGET_FILE_DIR:mips_sim>"
     "${PROJECT_SOURCE_DIR}")
+endif()
 
 add_test(
   NAME nexus_gpu_optional
@@ -125,4 +136,21 @@ add_test(
     "${Python3_EXECUTABLE}"
     "${PROJECT_SOURCE_DIR}/tests/integration/final_docs_test.py"
     final
+    "${PROJECT_SOURCE_DIR}")
+
+add_test(
+  NAME nexus_cross_model_differential
+  COMMAND
+    "${Python3_EXECUTABLE}"
+    "${PROJECT_SOURCE_DIR}/tests/integration/cross_model_test.py"
+    "$<TARGET_FILE:nexusc>"
+    "$<TARGET_FILE:mips_sim>"
+    "${PROJECT_SOURCE_DIR}")
+
+add_test(
+  NAME nexus_isa_styles
+  COMMAND
+    "${Python3_EXECUTABLE}"
+    "${PROJECT_SOURCE_DIR}/tests/integration/isa_styles_test.py"
+    "$<TARGET_FILE:nexusc>"
     "${PROJECT_SOURCE_DIR}")
