@@ -19,6 +19,8 @@
 #include "nexus/compiler/backend_mips/regalloc.hpp"
 #include "nexus/compiler/experimental_parallel_parsing/bison_lr.hpp"
 #include "nexus/compiler/experimental_parallel_parsing/prototype.hpp"
+#include "nexus/compiler/formal/automata.hpp"
+#include "nexus/compiler/formal/grammar.hpp"
 #include "nexus/compiler/frontend/ast_printer.hpp"
 #include "nexus/compiler/frontend/diagnostic.hpp"
 #include "nexus/compiler/frontend/lexer.hpp"
@@ -59,7 +61,9 @@ void print_usage(std::ostream& stream) {
          << "  nexusc compile <file> -S [-o out.s]\n"
          << "  nexusc compile <file> -S --regalloc none|linear-scan [-o out.s]\n"
          << "  nexusc compile <file> --emit-ir\n"
-         << "  nexusc isa <file> [--style stack|accumulator|register-memory|all] [--listing]\n";
+         << "  nexusc isa <file> [--style stack|accumulator|register-memory|all] [--listing]\n"
+         << "  nexusc regex <pattern> [--nfa] [--match <text>...]\n"
+         << "  nexusc grammar <file.g> first-follow|transform|ll1|lr0|slr|lr1|lalr|earley [\"tokens\"] [--items]\n";
 }
 
 bool load_source_file(const std::string& file_name, LoadedSource& loaded_source) {
@@ -517,6 +521,154 @@ int run_isa(const LoadedSource& loaded_source, const std::string& style_name, bo
   return agree ? 0 : 1;
 }
 
+int run_regex(int argc, char** argv) {
+  namespace formal = nexus::compiler::formal;
+  const std::string pattern = argv[2];
+  const auto result = formal::regex_to_nfa(pattern);
+  if (!result.nfa.has_value()) {
+    std::cerr << "error: " << result.error << '\n';
+    return 1;
+  }
+  bool show_nfa = false;
+  std::vector<std::string> texts;
+  for (int index = 3; index < argc; ++index) {
+    const std::string option = argv[index];
+    if (option == "--nfa") {
+      show_nfa = true;
+    } else if (option == "--match") {
+      while (index + 1 < argc) {
+        texts.emplace_back(argv[++index]);
+      }
+    } else {
+      std::cerr << "error: unknown regex option '" << option << "'\n";
+      return 1;
+    }
+  }
+  const auto dfa = formal::subset_construction(*result.nfa);
+  const auto minimal = formal::minimize(dfa);
+  std::cout << "regex: " << pattern << '\n'
+            << "NFA states: " << result.nfa->states.size() << ", DFA states: " << dfa.size()
+            << ", minimal DFA states: " << minimal.size() << '\n';
+  if (show_nfa) {
+    std::cout << formal::print_nfa(*result.nfa);
+  }
+  std::cout << formal::print_dfa(minimal, "minimal DFA");
+  for (const auto& text : texts) {
+    const bool nfa = formal::nfa_matches(*result.nfa, text);
+    const bool accepted = minimal.matches(text);
+    std::cout << "match \"" << text << "\": " << (accepted ? "accept" : "reject")
+              << (nfa == accepted && dfa.matches(text) == accepted ? "" : "  (NFA/DFA DISAGREE)") << '\n';
+  }
+  return 0;
+}
+
+void print_parse(const nexus::compiler::formal::Grammar& grammar, const nexus::compiler::formal::ParseOutcome& outcome) {
+  for (const auto& step : outcome.steps) {
+    std::cout << "  " << step << '\n';
+  }
+  if (!outcome.accepted) {
+    std::cout << "rejected: " << outcome.error << '\n';
+    return;
+  }
+  std::cout << "accepted";
+  if (outcome.value.has_value()) {
+    std::cout << ", synthesized value = " << *outcome.value;
+  }
+  std::cout << '\n';
+  if (outcome.tree) {
+    std::cout << nexus::compiler::formal::print_tree(grammar, *outcome.tree);
+  }
+}
+
+int run_grammar(int argc, char** argv) {
+  namespace formal = nexus::compiler::formal;
+  if (argc < 4) {
+    print_usage(std::cerr);
+    return 1;
+  }
+  LoadedSource source;
+  if (!load_source_file(argv[2], source)) {
+    return 1;
+  }
+  const auto parsed = formal::parse_grammar(source.text);
+  if (!parsed.grammar.has_value()) {
+    std::cerr << "error: " << parsed.error << '\n';
+    return 1;
+  }
+  const formal::Grammar& grammar = *parsed.grammar;
+  const std::string analysis = argv[3];
+  std::optional<std::string> input;
+  bool items = false;
+  for (int index = 4; index < argc; ++index) {
+    const std::string option = argv[index];
+    if (option == "--items") {
+      items = true;
+    } else {
+      input = option;
+    }
+  }
+  std::optional<std::vector<formal::Token>> tokens;
+  if (input.has_value()) {
+    std::string error;
+    tokens = formal::tokenize(grammar, *input, error);
+    if (!tokens.has_value()) {
+      std::cerr << "error: " << error << '\n';
+      return 1;
+    }
+  }
+
+  if (analysis == "first-follow") {
+    std::cout << formal::print_grammar(grammar) << formal::print_first_follow(grammar, formal::compute_first_follow(grammar));
+    return 0;
+  }
+  if (analysis == "transform") {
+    const auto transformed = formal::left_factor(formal::eliminate_left_recursion(grammar));
+    const auto sets = formal::compute_first_follow(transformed);
+    const auto table = formal::build_ll1_table(transformed, sets);
+    std::cout << "after left-recursion elimination and left factoring:\n"
+              << formal::print_grammar(transformed) << formal::print_first_follow(transformed, sets)
+              << (table.conflicts == 0 ? "the transformed grammar is LL(1)\n" : "the transformed grammar is still not LL(1)\n");
+    return 0;
+  }
+  if (analysis == "ll1") {
+    const auto sets = formal::compute_first_follow(grammar);
+    const auto table = formal::build_ll1_table(grammar, sets);
+    std::cout << formal::print_ll1_table(grammar, table);
+    if (tokens.has_value()) {
+      print_parse(grammar, formal::ll1_parse(grammar, table, *tokens));
+    }
+    return 0;
+  }
+  if (analysis == "lr0" || analysis == "slr" || analysis == "lr1" || analysis == "lalr") {
+    const formal::LrKind kind = analysis == "lr0"   ? formal::LrKind::Lr0
+                                : analysis == "slr" ? formal::LrKind::Slr1
+                                : analysis == "lr1" ? formal::LrKind::Lr1
+                                                    : formal::LrKind::Lalr1;
+    const auto table = formal::build_lr_table(grammar, kind);
+    std::cout << formal::print_lr_table(table, items);
+    if (tokens.has_value()) {
+      print_parse(table.augmented, formal::lr_parse(table, *tokens));
+    }
+    return 0;
+  }
+  if (analysis == "earley") {
+    if (!tokens.has_value()) {
+      std::cerr << "error: earley needs an input string\n";
+      return 1;
+    }
+    const auto outcome = formal::earley_parse(grammar, *tokens);
+    for (const auto& line : outcome.sets) {
+      std::cout << line << '\n';
+    }
+    std::cout << (outcome.accepted ? "accepted" : "rejected") << ", chart items: " << outcome.chart_items
+              << ", parse trees: "
+              << (outcome.parse_trees.has_value() ? std::to_string(*outcome.parse_trees) : std::string("infinite")) << '\n';
+    return 0;
+  }
+  std::cerr << "error: unknown grammar analysis '" << analysis << "'\n";
+  return 1;
+}
+
 struct CompileOptions {
   bool emit_ir = false;
   bool emit_assembly = false;
@@ -627,6 +779,18 @@ int main(int argc, char** argv) {
       return 1;
     }
     return run_opt(loaded_source, options);
+  }
+
+  if (command == "regex") {
+    if (argc < 3) {
+      print_usage(std::cerr);
+      return 1;
+    }
+    return run_regex(argc, argv);
+  }
+
+  if (command == "grammar") {
+    return run_grammar(argc, argv);
   }
 
   if (command == "isa") {

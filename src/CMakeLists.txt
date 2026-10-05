@@ -18,6 +18,7 @@ target_link_libraries(
     nexus_passes
     nexus_backend_mips
     nexus_isa_styles
+    nexus_formal
     nexus_mips_assembler
     nexus_mips_loader
     nexus_sim_functional)
