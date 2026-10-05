@@ -1,0 +1,18 @@
+// SCCP folds x * 2 == 8 to true, so the else branch is unreachable and y is the constant 5;
+// the loop counter i stays BOTTOM because it changes around the back edge.
+fn main() -> int {
+  var x: int = 4;
+  var y: int = 0;
+  if (x * 2 == 8) {
+    y = x + 1;
+  } else {
+    y = 99;
+  }
+  var i: int = 0;
+  var sum: int = 0;
+  while (i < 3) {
+    sum = sum + y;
+    i = i + 1;
+  }
+  return sum + y;
+}

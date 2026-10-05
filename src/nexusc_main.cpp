@@ -13,6 +13,7 @@
 #include "nexus/compiler/analysis/interprocedural.hpp"
 #include "nexus/compiler/analysis/liveness.hpp"
 #include "nexus/compiler/analysis/region_flow.hpp"
+#include "nexus/compiler/analysis/ssa.hpp"
 #include "nexus/compiler/analysis/symbolic.hpp"
 #include "nexus/compiler/analysis/alias_analysis.hpp"
 #include "nexus/compiler/backend_mips/codegen.hpp"
@@ -32,6 +33,7 @@
 #include "nexus/compiler/passes/affine_stripmine.hpp"
 #include "nexus/compiler/passes/loop_unroll.hpp"
 #include "nexus/compiler/semantics/semantic_analyzer.hpp"
+#include "nexus/compiler/types/hindley_milner.hpp"
 #include "nexus/mips/assembler_support/printer.hpp"
 #include "nexus/mips/loader/parser.hpp"
 #include "nexus/sim/functional/interpreter.hpp"
@@ -55,6 +57,7 @@ void print_usage(std::ostream& stream) {
          << "  nexusc dom <file>\n"
          << "  nexusc analysis liveness <file>\n"
          << "  nexusc analysis regalloc <file>\n"
+         << "  nexusc analysis ssa|sccp <file>\n"
          << "  nexusc experimental-parse <file> --mode parallel|bison-lr\n"
          << "  nexusc opt <file> --analysis symbolic|region-liveness|affine|alias|interproc\n"
          << "  nexusc opt <file> --pass unroll|unroll-symbolic|strip-mine|interproc-constfold\n"
@@ -63,6 +66,7 @@ void print_usage(std::ostream& stream) {
          << "  nexusc compile <file> --emit-ir\n"
          << "  nexusc isa <file> [--style stack|accumulator|register-memory|all] [--listing]\n"
          << "  nexusc regex <pattern> [--nfa] [--match <text>...]\n"
+         << "  nexusc infer \"<mini-ML expression>\" [--trace]\n"
          << "  nexusc grammar <file.g> first-follow|transform|ll1|lr0|slr|lr1|lalr|earley [\"tokens\"] [--items]\n";
 }
 
@@ -276,6 +280,18 @@ int run_analysis(const LoadedSource& loaded_source, const std::string& analysis_
       const auto cfg = nexus::compiler::analysis::build_cfg(module->functions[index]);
       const auto live = nexus::compiler::analysis::analyze_liveness(module->functions[index], cfg);
       std::cout << nexus::compiler::analysis::print_liveness(module->functions[index], cfg, live);
+      continue;
+    }
+    if (analysis_name == "ssa" || analysis_name == "sccp") {
+      const auto& function = module->functions[index];
+      const auto cfg = nexus::compiler::analysis::build_cfg(function);
+      const auto dominators = nexus::compiler::analysis::compute_dominators(cfg);
+      const auto ssa = nexus::compiler::analysis::build_ssa(function, cfg, dominators);
+      if (analysis_name == "ssa") {
+        std::cout << nexus::compiler::analysis::print_ssa(function, ssa);
+      } else {
+        std::cout << nexus::compiler::analysis::print_sccp(function, ssa, nexus::compiler::analysis::run_sccp(function, cfg, ssa));
+      }
       continue;
     }
     if (analysis_name == "regalloc") {
@@ -787,6 +803,25 @@ int main(int argc, char** argv) {
       return 1;
     }
     return run_regex(argc, argv);
+  }
+
+  if (command == "infer") {
+    if (argc < 3) {
+      print_usage(std::cerr);
+      return 1;
+    }
+    const auto inferred = nexus::compiler::types::infer_type(argv[2]);
+    if (argc > 3 && std::string_view(argv[3]) == "--trace") {
+      for (const auto& step : inferred.steps) {
+        std::cout << "  " << step << '\n';
+      }
+    }
+    if (!inferred.ok) {
+      std::cout << "type error: " << inferred.error << '\n';
+      return 1;
+    }
+    std::cout << inferred.type << '\n';
+    return 0;
   }
 
   if (command == "grammar") {

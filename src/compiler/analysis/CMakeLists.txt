@@ -9,7 +9,8 @@ add_library(
     src/symbolic.cpp
     src/affine_analysis.cpp
     src/alias_analysis.cpp
-    src/interprocedural.cpp)
+    src/interprocedural.cpp
+    src/ssa.cpp)
 
 add_library(Nexus::analysis ALIAS nexus_analysis)
 
