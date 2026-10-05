@@ -10,11 +10,13 @@ namespace {
 
 std::string feature_label(std::string_view tool_name) {
   if (tool_name == "nexusc") {
-    return "Compiler path available: lex/parse/ast/check/ir/cfg/dom/analysis/opt/experimental-parse/compile";
+    return "Compiler path available: lex/parse/ast/check/ir/cfg/dom/analysis/opt/experimental-parse/compile"
+           "; quads/isa/regex/grammar/infer/poly";
   }
 
   if (tool_name == "mips-sim") {
-    return "MIPS simulator available: fp-demo <lhs> <rhs>; run <file> --mode functional|single-cycle|multi-cycle|pipeline|advanced|parallel [--trace] [--stats]; HDL via hdl-test all";
+    return "MIPS simulator available: fp-demo <lhs> <rhs>; run <file> --mode functional|single-cycle|multi-cycle|pipeline|advanced|parallel [--trace] [--stats]; HDL via hdl-test all"
+           "; also --mode simt, --scheduler tomasulo, encode, arith";
   }
 
   return "Functionality: not yet implemented";

@@ -1,61 +1,16 @@
 # Course Mapping
 
-This report maps the final Nexus repository to the six required educational domains using the final
-audit vocabulary.
+How Nexus 1.0.0 covers the six course outlines in `docs/course_outlines/`. The topic-by-topic table
+with code paths and test names is `docs/reports/full_syllabus_checklist.md`.
 
-## Audit Inputs
-
-The mapping was derived from:
-
-- project-contract files: `README.md`, `ROADMAP.md`, `STATUS.md`, `ARCHITECTURE.md`, `CHANGELOG.md`
-- implementation evidence in `src/`, `tests/`, `examples/`, `scripts/`, `tools/`, `benchmarks/`, and `cmake/`
-- current report/checklist files
-- six syllabus PDFs audited on 2026-04-22
-
-No separate standalone "mega-project brief" file was present in the repository snapshot. For that
-axis of the audit, the project-contract files above were treated as the maintained statement of
-project intent and bounded scope.
-
-## Status Vocabulary
-
-- fully implemented
-- experimentally implemented
-- documented with worked examples
-- still outside bounded scope
-
-## Domain Summary
-
-| Domain | Overall status | Strongest evidence | Remaining bounded-scope note |
-| --- | --- | --- | --- |
-| 1. Principles of Computer Operation | experimentally implemented | MIPS subset docs, backend, functional execution, arithmetic helpers, HDL arithmetic modules, FPU-lite demo, tests | broader industrial floating-point and synthesis depth remain outside bounded scope |
-| 2. Computer Organization | experimentally implemented | functional/single/multi/pipeline stack, L1+L2 cache hierarchy, I/O/DMA/interrupt support, HDL control/pipeline-register/CPU-slice modules, tests | full industrial memory-system and full CPU synthesis remain outside bounded scope |
-| 3. Compilers | fully implemented | handwritten lexer/parser, AST, semantics, IR, MIPS backend, compile/run CLI flows, end-to-end tests | generated production parsing is not the default path |
-| 4. Computer Architecture | experimentally implemented | advanced predictor support, width experiments, VLIW-lite, bounded scoreboard scheduler, Amdahl evaluation, literature notes | Tomasulo, reorder buffers, and industrial out-of-order machinery remain outside bounded scope |
-| 5. Advanced Compiler Topics | experimentally implemented | experimental parallel parse, Flex/Bison LR parser path, symbolic analysis, affine analysis/strip-mining, alias and interprocedural summaries, toolchain comparison, compiler reading notes | industrial SSA/polyhedral/generalized parsing depth remains outside bounded scope |
-| 6. Parallel Systems and Parallel Programming | experimentally implemented | `src/sim/parallel/`, parallel tests, OpenMP/MPI/SIMD binaries, optional CUDA demo path, `parallel-bench`, interconnect docs | mandatory device-backed GPU success and large manycore studies remain outside bounded scope |
-
-## Relevant Topic Crosswalk
-
-| Relevant topic | Classification | Evidence |
+| course | coverage | main entry points |
 | --- | --- | --- |
-| FPU-lite | experimentally implemented | `src/common/src/fpu_lite.cpp`, `tests/unit/fpu_lite_test.cpp` |
-| L1+L2 hierarchy | experimentally implemented | `src/sim/memory/`, `tests/unit/memory_cache_test.cpp`, `tests/unit/pipeline_memory_system_test.cpp`, CLI coverage |
-| Flex/Bison LR parser path | experimentally implemented | `src/compiler/experimental_parallel_parsing/`, `tests/unit/experimental_parse_test.cpp` |
-| scoreboard scheduler | experimentally implemented | `src/sim/advanced/src/model.cpp`, `tests/unit/advanced_model_test.cpp` |
-| affine/locality compiler slice | experimentally implemented | `src/compiler/analysis/src/affine_analysis.cpp`, `src/compiler/passes/src/affine_stripmine.cpp`, focused tests |
-| stronger GPU demo | experimentally implemented | `benchmarks/gpu_optional/gpu_optional_bench.cu`, `tests/integration/gpu_optional_test.py` |
-| HDL CPU slice | experimentally implemented | `src/hdl/cpu_slice/nexus_cpu_slice.v`, `src/hdl/cpu_slice/cpu_slice_tb.v`, HDL tests |
-| core handwritten compiler path | fully implemented | `nexusc`, `tests/unit/`, `tests/integration/nexusc_cli_test.py` |
-| Tomasulo/reservation stations and generalized ambiguity-supporting parsing theory | documented with worked examples | `docs/microarchitecture/advanced_scheduling.md`, `docs/compiler/generalized_and_parallel_parsing.md` |
-| full synthesizable HDL CPU, mandatory GPU execution, industrial SSA/register allocation, reorder-buffer OOO core | still outside bounded scope | final-scope documentation and paper |
+| NEY221 Principles of Computer Operation | complete | MIPS toolchain; `nexusc isa` (stack/JVM-like, accumulator, IA-32-like, MIPS); `mips-sim arith` (IEEE-754, integer encodings, Booth, non-restoring, CLA, UTF-8); HDL arithmetic units |
+| EY321 Computer Organization | complete | single-cycle and multi-cycle models with hardwired and microprogrammed control; pipeline with hazards, forwarding and prediction; L1/L2, I/O, interrupts, DMA; Verilog modules and the pipelined Verilog CPU with co-simulation |
+| NEY613 Compilers | complete | `nexusc` end to end; `nexusc regex` and `nexusc grammar` (automata, LL(1), LR(0)/SLR/LR(1)/LALR, attributes); Flex/Bison path; `nexusc quads`; linear-scan register allocation |
+| NEY606 Computer Architecture | complete | Amdahl and benchmark scripts; superscalar, VLIW-lite, scoreboard and Tomasulo with ROB, speculation and RAS; `--pipeline-depth`; caches and peripherals; multiprocessor coherence and consistency |
+| NEY709 Advanced Compiler Topics | complete | Earley and parallel parsing; Hindley-Milner (`nexusc infer`); SSA and SCCP; data flow (iterative and region based); symbolic analysis; unrolling; polyhedral transformations (`nexusc poly`); alias and interprocedural analysis |
+| NEY704 Parallel Systems and Programming | complete (OpenMP, MPI and CUDA demos need their toolchains) | SMT on the Tomasulo core; multicore simulator with snooping/directory coherence, SC/weak consistency, locks, barriers, atomics; bus/switch/ring/mesh networks; 1-64 cores; asymmetric cores; SIMT GPU model; OpenMP, MPI, SIMD and CUDA programs |
 
-## Companion Audit
-
-The detailed examiner-style breakdown lives in `docs/reports/repository_wide_truth_audit.md`.
-
-## Mapping Rule
-
-Nexus now fully covers the course set only in bounded educational/research-grade form. That means
-the domains are satisfied by a deliberate mix of fully implemented core paths, experimentally
-implemented extensions, and worked-example documentation, while the final reports still name the
-topics that remain outside bounded scope.
+Theory-only parts of the outlines (history of computing, Flynn's taxonomy, reading lists) are covered
+in `docs/reports/history_of_computing_evolution.md`, `docs/parallel/overview.md` and `docs/literature/`.

@@ -12,12 +12,12 @@ int main() {
     return 1;
   }
 
-  if (info.version_label != "0.11.0-phase11") {
+  if (info.version_label != "1.0.0") {
     std::cerr << "Unexpected version label: " << info.version_label << '\n';
     return 1;
   }
 
-  if (info.phase_label != "11 - HDL, Literature, and Final Validation") {
+  if (info.phase_label != "1.0 - complete course coverage") {
     std::cerr << "Unexpected phase label: " << info.phase_label << '\n';
     return 1;
   }

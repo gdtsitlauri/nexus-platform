@@ -22,14 +22,14 @@ depths.
 - distributed-memory systems: experimentally implemented through the tiny MPI benchmark path
 - symmetric multiprocessors: experimentally implemented through the bounded equal-core multicore
   simulator
-- asymmetric multiprocessors: documented with worked examples only; Nexus does not ship an
-  executable asymmetric-core model
+- asymmetric multiprocessors: implemented with per-core CPI (`--core-cpi 1,1,4,4`, big/little
+  cores); see `docs/parallel/manycore.md`
 - homogeneous systems: experimentally implemented through the shared-core simulator and CPU-first
   benchmark paths
 - heterogeneous systems: experimentally implemented in bounded form through SIMD plus the optional
   CUDA demo path
-- multithreaded and SMT concepts: documented with worked examples only; the repository explains the
-  concept relative to multicore execution but does not implement hardware-threaded cores
+- multithreaded and SMT cores: implemented as 2-way SMT on the Tomasulo core (`--smt`), with
+  shared ROB, reservation stations and functional units and ICOUNT fetch
 
 In other words, Nexus implements a small shared-memory SMP-style teaching platform and then uses
 MPI, SIMD, and optional CUDA examples to connect that core to broader parallel-system categories.

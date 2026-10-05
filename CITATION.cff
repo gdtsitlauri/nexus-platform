@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "NEXUS: a compiler, CPU simulators, parallel and GPU models and a Verilog MIPS core covering six computer-systems courses"
+type: software
+version: 1.0.0
+authors:
+  - given-names: "George David"
+    family-names: "Tsitlauri"
+    affiliation: "Department of Informatics and Telecommunications, University of Thessaly"
+date-released: 2026-10-05
+license: MIT
+repository-code: "https://github.com/gdtsitlauri/nexus-platform"
+abstract: >-
+  A C++20 and Verilog project covering six computer-systems courses with executable, tested code: a
+  NexusLang-to-MIPS compiler with linear-scan register allocation, SSA/SCCP and polyhedral loop
+  transformations; automata, LL/LR/Earley parsing and Hindley-Milner type inference; MIPS execution
+  models from a functional interpreter to a Tomasulo core with reorder buffer and SMT; multicore,
+  network-on-chip and SIMT GPU models; bit-exact IEEE-754 soft float; and a synthesisable 5-stage
+  pipelined MIPS core co-simulated against the simulators.
+keywords: [compilers, computer architecture, MIPS, simulation, Tomasulo, polyhedral, Verilog, education]

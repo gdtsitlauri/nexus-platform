@@ -7,7 +7,7 @@ from pathlib import Path
 
 REQUIRED_PATHS = [
     "README.md",
-    "ROADMAP.md",
+    "docs/history/roadmap_phases_1_to_11.md",
     "ARCHITECTURE.md",
     "STATUS.md",
     "CHANGELOG.md",
@@ -68,10 +68,9 @@ REQUIRED_PATHS = [
 ]
 
 REQUIRED_LEGEND = [
-    "- implemented",
-    "- experimentally implemented",
-    "- documented with worked examples",
-    "- pending",
+    "**implemented and tested**",
+    "**implemented, toolchain-dependent**",
+    "**notes**",
 ]
 
 

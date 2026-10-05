@@ -1,261 +1,139 @@
-# Nexus
+# NEXUS
 
-Nexus is a bounded educational/research-grade platform that connects compiler construction, MIPS
-code generation, CPU and microarchitecture simulation, advanced architecture experiments, parallel
-systems work, and HDL validation inside one repository. The project is intentionally broad, but the
-documentation stays conservative: core compiler and simulator flows are fully implemented, several
-later course-aligned slices are experimentally implemented, broader theory areas are documented with
-worked examples, and a small set of industrial-scale topics remains explicitly outside bounded
-scope.
+**Can one codebase cover six computer-systems courses with programs that run and are checked, not just notes?**
 
-## Project Metadata
+NEXUS (version 1.0.0) is a C++20 / Verilog project. It contains:
+- a compiler for a small language (NexusLang) down to MIPS;
+- execution models from a functional interpreter up to an out-of-order superscalar core;
+- multicore, network-on-chip and GPU (SIMT) models;
+- a synthesisable pipelined MIPS CPU in Verilog;
+- executable tools for the theory parts: automata, grammars, type inference, SSA, polyhedral loop
+  transformations, computer arithmetic.
 
-| Field | Value |
+Every topic of the six University of Thessaly course outlines in `docs/course_outlines/` maps to code
+and an automated test (`docs/reports/full_syllabus_checklist.md`). The only exceptions are reading
+lists and history.
+
+| course | what runs |
 | --- | --- |
-| Author | George David Tsitlauri |
-| Affiliation | Dept. of Informatics & Telecommunications, University of Thessaly, Greece |
-| Contact | gdtsitlauri@gmail.com |
-| Year | 2026 |
+| NEY221 Principles of Computer Operation | MIPS toolchain; stack (JVM-like), accumulator and IA-32-like back ends with interpreters; bit-exact IEEE-754 soft float; integer encodings; Booth, non-restoring division, carry lookahead; UTF-8 |
+| EY321 Computer Organization | single-cycle and multi-cycle CPUs (hardwired and microprogrammed control); 5-stage pipeline with hazards, forwarding, prediction; L1/L2 caches, I/O, interrupts, DMA; Verilog datapath units and a full pipelined CPU |
+| NEY613 Compilers | hand-written lexer and parser, Flex/Bison path, semantic analysis, three-address code and quadruples, MIPS code generation, linear-scan register allocation; regex to minimal DFA; LL(1), LR(0), SLR(1), LR(1), LALR(1) with attribute evaluation |
+| NEY606 Computer Architecture | superscalar, VLIW, scoreboard and Tomasulo scheduling with reorder buffer, register renaming, speculation and return-address stack; deeper pipelines; Amdahl studies; coherence and consistency |
+| NEY709 Advanced Compiler Topics | Earley (ambiguous grammars) and parallel parsing; Hindley-Milner inference; SSA and SCCP; iterative and region-based data flow; symbolic, alias and interprocedural analysis; loop unrolling; polyhedral dependence analysis and transformations |
+| NEY704 Parallel Systems | SMT; multicore with snooping/directory coherence, SC/weak consistency, locks, barriers, atomics; bus, switch, ring and 2-D mesh networks up to 64 cores; asymmetric cores; SIMT GPU model; OpenMP, MPI, SIMD and CUDA programs |
 
-## Current Status
+## Main results
 
-- phase label: `0.11.0-phase11`
-- verified on: `2026-04-22`
-- current low-memory validation: `56/56` tests passed with `ctest --output-on-failure -j1`
-- CPU-only validation is the required baseline success path
-- optional CUDA remains feature-gated behind `-DNEXUS_ENABLE_CUDA=ON`
+All numbers come from `ctest` and the commands in `docs/`; the full record is `docs/reports/validation_report.md`.
 
-Nexus uses four repository-wide status labels:
+1. **Every timing model reproduces the reference result.** All 12 test programs, compiled with and
+   without register allocation, give the functional interpreter's exit code on 12 CPU models: single
+   and multi-cycle, the pipeline with and without caches, scoreboard, Tomasulo, dual issue and
+   multicore. That is 288 runs.
+2. **The Verilog CPU matches the simulator instruction for instruction.** The compiler's output runs
+   on the 5-stage RTL core (`nexusc` -> `mips-sim encode` -> Icarus Verilog). It gives the same exit
+   code and the same retired-instruction count as the simulator in all 16 runs, and Yosys synthesises
+   the core.
+3. **The arithmetic is exact.** The software IEEE-754 add/sub/mul/div is bit-identical to the
+   hardware FPU on 2,000,000 random operand pairs, including subnormals, infinities, NaNs and rounding
+   ties.
+4. **The theory tools agree with independent references.**
+   - The regex engine agrees with `std::regex` and reproduces the Dragon-book results: (a|b)*abb
+     gives a 4-state minimal DFA; grammar 4.49 has 10 LALR(1) states against 14 LR(1).
+   - The Earley parser counts Catalan-number parse trees.
+   - Hindley-Milner infers the principal types and rejects `fun x -> x x` by the occurs check.
+   - Of 600 random polyhedral transformations, all 341 judged legal reproduce the original results
+     exactly, and Fourier-Motzkin never misses a dependence.
+5. **The architecture trade-offs come out as in the textbooks.**
+   - Linear-scan allocation removes 21-58% of executed instructions.
+   - On matrix multiplication, a 4-wide Tomasulo core with a 2-bit predictor reaches IPC 1.76,
+     against 0.95 for the in-order core.
+   - JVM-like stack code is the densest; MIPS with allocation moves 13x less data than stack-frame
+     MIPS.
+   - Divergent GPU kernels drop to 14% SIMD efficiency; strided accesses need 32 memory transactions
+     per warp request against 1.
+6. **Two defects in the earlier version were found and fixed** (`STATUS.md`):
+   - the cached pipeline returned wrong results for programs with calls;
+   - passing a row of a 2-D array used the wrong address.
 
-- `fully implemented`
-- `experimentally implemented`
-- `documented with worked examples`
-- `still outside bounded scope`
+## Limitations (reported as such)
 
-## System At A Glance
+- The simulators are teaching models. The Tomasulo core is trace-driven; the SIMT model has no thread
+  blocks, shared memory or latency hiding; cycle counts are model metrics, not measurements of real
+  hardware.
+- The Verilog CPU is verified in simulation and synthesised generically. It has not been placed and
+  routed on an FPGA. Multiply and divide are single-cycle combinational blocks.
+- NexusLang has `int`, `bool` and arrays only (no floating point, pointers or globals). The IA-32 and
+  JVM back ends are faithful subsets, not complete instruction sets.
+- The polyhedral tool handles perfect loop nests with concrete parameter values and does not generate
+  tiled code.
+- The OpenMP, MPI and CUDA programs need their toolchains. They were not run on the Windows host used
+  for the 1.0.0 validation, where those tests are skipped.
 
-| Layer | Main components | Status | Representative commands or entry points |
-| --- | --- | --- | --- |
-| Handwritten frontend and semantics | `src/compiler/frontend`, `src/compiler/semantics` | fully implemented | `./build/bin/nexusc lex <file>`, `./build/bin/nexusc check <file>` |
-| IR, CFG, dominators, and baseline analysis | `src/compiler/ir`, `src/compiler/analysis` | fully implemented | `./build/bin/nexusc ir <file>`, `cfg`, `dom`, `analysis liveness` |
-| Experimental compiler slices | `src/compiler/experimental_parallel_parsing`, `src/compiler/passes` | experimentally implemented | `experimental-parse --mode bison-lr`, `opt --analysis ...`, `opt --pass ...` |
-| MIPS backend and loader path | `src/compiler/backend_mips`, `src/mips` | fully implemented | `./build/bin/nexusc compile <file> -S`, `./build/bin/mips-sim run <file> --mode functional` |
-| Core simulator ladder | `src/sim/functional`, `single_cycle`, `multi_cycle`, `pipeline` | fully implemented | `./build/bin/mips-sim run <file> --mode functional|single-cycle|multi-cycle|pipeline` |
-| Memory, cache, I/O, interrupts, and DMA | `src/sim/memory`, `src/sim/io` | experimentally implemented | pipeline `--cache ... --cache-l2 ... --stats`, `--io-demo`, `--interrupt-demo`, `--dma-demo` |
-| Advanced architecture sandbox | `src/sim/advanced` | experimentally implemented | `./build/bin/mips-sim run <file> --mode advanced --scheduler scoreboard --predictor 2bit --stats` |
-| Parallel systems layer | `src/sim/parallel`, `benchmarks/`, `parallel-bench` | experimentally implemented | `./build/bin/mips-sim run <file> --mode parallel ...`, `./parallel-bench --all --build-dir ./build --repo-root .` |
-| HDL correlation | `src/hdl`, `hdl-test`, `scripts/test_hdl.sh` | experimentally implemented | `./hdl-test all`, `./hdl-test cpu-slice` |
-| Literature, mapping, and audit trail | `docs/`, `docs/reports/` | documented with worked examples | `docs/reports/final_nexus_system_paper.md`, `validation_report.md`, `repository_wide_truth_audit.md` |
+## Folder map
 
-## End-to-End Flow
-
-```mermaid
-flowchart LR
-  A[NexusLang source] --> B[Handwritten frontend]
-  B --> C[AST and semantic analysis]
-  C --> D[Typed IR, CFG, dominators, liveness]
-  D --> E[Bounded analyses and passes]
-  E --> F[MIPS backend]
-  F --> G[Textual assembly]
-  G --> H{Study paths}
-  H --> I[functional / single-cycle / multi-cycle / pipeline]
-  H --> J[advanced architecture sandbox]
-  H --> K[parallel simulator]
-  I --> L[traces, timelines, and stats]
-  J --> L
-  K --> L
-  L --> M[benchmark wrappers and reports]
-  I --> N[HDL correlation and teaching diagrams]
+```
+nexus-platform/
+  README.md, README_GR.md, LICENSE (MIT), CITATION.cff, CHANGELOG.md, STATUS.md, ARCHITECTURE.md
+  src/
+    compiler/   frontend, semantics, ir, analysis (incl. SSA/SCCP), passes, backend_mips (incl. register
+                allocation), isa_styles, formal (automata, grammars), types (Hindley-Milner), polyhedral,
+                experimental_parallel_parsing (parallel + Flex/Bison)
+    sim/        functional, single_cycle, multi_cycle, pipeline, memory, io, advanced (incl. Tomasulo/SMT),
+                parallel (coherence, NoC, manycore), simt (GPU), metrics
+    mips/       ISA tables, assembly printer, loader, MIPS32 encoder
+    hdl/        Verilog units, CPU slice, cpu_pipeline (5-stage CPU + testbench)
+    common/     arithmetic, FPU-lite, IEEE-754 soft float, number systems
+    nexusc_main.cpp, mips_sim_main.cpp
+  benchmarks/   OpenMP, MPI, SIMD, optional CUDA
+  examples/     source_lang/ (NexusLang), grammars/, loops/, gpu/, parallel/, formal/
+  tests/        unit/, integration/, golden/, programs/ (shared test programs)
+  docs/
+    course_outlines/   the six course outlines (PDF)
+    reports/           full_syllabus_checklist.md, course_mapping.md, validation_report.md, studies
+    architecture/ compiler/ microarchitecture/ parallel/ hdl/   one note per topic
+    literature/        reading notes per course area
+    history/           phase-by-phase roadmap and the 0.11 audit
+  scripts/, tools/     benchmark, HDL and toolchain-comparison helpers
 ```
 
-## Layered Repository View
+## Building and running
 
-```mermaid
-flowchart TB
-  A[Language and formal worked examples] --> B[MIPS backend and ISA layer]
-  B --> C[Core simulator ladder]
-  C --> D[Advanced architecture sandbox]
-  D --> E[Parallel systems layer]
-  C --> F[HDL correlation]
-  E --> G[Validation, reports, and course mapping]
-  F --> G
-```
-
-## Repository Structure
-
-| Directory | Purpose | Example contents |
-| --- | --- | --- |
-| `src/compiler` | language frontend, IR, analyses, passes, backend, and experimental parsing | `frontend/src/lexer.cpp`, `ir/src/lowering.cpp`, `analysis/src/dominators.cpp`, `passes/src/loop_unroll.cpp` |
-| `src/mips` | assembly representation and loader support | `isa/src/instruction.cpp`, `loader/src/parser.cpp` |
-| `src/sim` | execution models, memory/system support, metrics, advanced sandbox, and parallel layer | `functional/src/interpreter.cpp`, `pipeline/src/model.cpp`, `advanced/src/model.cpp`, `parallel/src/model.cpp` |
-| `src/hdl` | Verilog modules and bounded CPU slice | `alu/nexus_alu.v`, `control/nexus_control_unit.v`, `cpu_slice/nexus_cpu_slice.v` |
-| `benchmarks` | OpenMP, MPI, SIMD, and optional CUDA demos | `openmp/openmp_bench.cpp`, `gpu_optional/gpu_optional_bench.cu` |
-| `examples` | NexusLang and formal worked examples | `source_lang/factorial.nx`, `formal/grammar_worked_example.md` |
-| `tests` | unit, integration, golden, HDL, and doc/audit validation | `unit/pipeline_model_test.cpp`, `golden/pipeline_trace.stdout.txt`, `integration/nexusc_cli_test.py` |
-| `scripts` | build/test/report helpers | `test_hdl.sh`, `parallel_bench.py`, `run_advanced_experiments.py` |
-| `tools` | small adjunct workflows | `toolchain_compare/run_toolchain_compare.py` |
-| `docs` | architecture notes, theory notes, reports, and audits | `microarchitecture/pipeline.md`, `parallel/overview.md`, `reports/final_nexus_system_paper.md` |
-
-## CLI Tools
-
-| Tool | Purpose | Representative usage |
-| --- | --- | --- |
-| `./build/bin/nexusc` | frontend views, IR views, bounded optimization/analysis, and MIPS emission | `./build/bin/nexusc compile examples/source_lang/factorial.nx -S -o /tmp/nexus_factorial.s` |
-| `./build/bin/mips-sim` | floating/fixed-point demo plus six simulator modes | `./build/bin/mips-sim run /tmp/nexus_factorial.s --mode functional --stats` |
-| `./parallel-bench` | tiny OpenMP, MPI, SIMD, parallel-simulator, and optional GPU wrapper | `./parallel-bench --all --build-dir ./build --repo-root .` |
-| `./hdl-test` | HDL test helper over the Verilog suites | `./hdl-test all` |
-
-## Simulator Modes
-
-| Mode | What it demonstrates | Status | Notes |
-| --- | --- | --- | --- |
-| `functional` | correctness-first ISA execution | fully implemented | no timing overlap; reference path for later models |
-| `single-cycle` | one-instruction-per-cycle datapath/control view | fully implemented | hardwired control decoding is explicit |
-| `multi-cycle` | per-instruction state sequencing | fully implemented | supports both `--control hardwired` and `--control microcode` |
-| `pipeline` | 5-stage overlap, hazards, forwarding, stalls, flushes, branch effects, trace/timeline | fully implemented | supports `--trace`, `--timeline`, static predictors, and cache options |
-| `advanced` | width experiments, VLIW-lite, scoreboard, bounded speculation penalties | experimentally implemented | includes `--scheduler inorder|vliw-lite|scoreboard` and predictor experiments |
-| `parallel` | multicore, coherence-lite, consistency-lite, synchronization, and interconnect-lite | experimentally implemented | supports `--coherence`, `--consistency`, and `--interconnect` |
-
-## Course Coverage Snapshot
-
-| Course | Main repository evidence | Overall classification |
-| --- | --- | --- |
-| Principles of Computer Operation | MIPS path, ISA comparisons, arithmetic helpers, HDL arithmetic modules, FPU-lite demo | experimentally implemented |
-| Computer Organization | single-cycle, multi-cycle, pipeline, control models, caches, I/O, interrupts, DMA, HDL support | experimentally implemented |
-| Compilers | handwritten lexer/parser, AST, semantics, IR, code generation, end-to-end compile/run flow | fully implemented |
-| Computer Architecture | Amdahl evaluation, predictors, VLIW-lite, scoreboard, coherence/consistency-lite, literature integration | experimentally implemented |
-| Advanced Compiler Topics | parallel parsing, Flex/Bison LR path, CFG/dominators/data-flow, symbolic/affine/alias/interprocedural work | experimentally implemented |
-| Parallel Systems and Parallel Programming | parallel simulator, OpenMP, MPI, SIMD, optional GPU path, bus/switch/NoC-lite, docs on taxonomy | experimentally implemented |
-
-For the detailed per-topic classification, see:
-
-- `docs/reports/full_syllabus_checklist.md`
-- `docs/reports/course_mapping.md`
-- `docs/reports/repository_wide_truth_audit.md`
-
-## Validation Snapshot
-
-| Item | Current state | Evidence |
-| --- | --- | --- |
-| Build tree reuse | `ninja -j2` completes with `ninja: no work to do.` | `docs/reports/validation_report.md` |
-| Full low-memory suite | `56/56` passed | `ctest --output-on-failure -j1` |
-| CPU-only baseline | required and validated | final audit/report set |
-| Optional CUDA path | cleanly feature-gated | `-DNEXUS_ENABLE_CUDA=ON` and optional `gpu-bench` |
-| GPU status in CPU-only run | clean skip | `suite=gpu kernel=vector-add status=skipped reason=cuda-disabled` |
-| Final audit/report trail | present and cross-linked | final paper, checklist, mapping, truth audit, validation report |
-
-## Key Commands
-
-Configure and build:
+Requirements: CMake 3.25+, a C++20 compiler, Python 3, Flex and Bison. Optional: Icarus Verilog and
+Yosys (HDL tests), an OpenMP compiler, MPI, CUDA, clang.
 
 ```bash
-cmake -S . -B build -G Ninja
-cd build
-ninja -j2
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+cd build && ctest --output-on-failure
 ```
 
-Optional CUDA build:
+A few entry points (more in each `docs/` note):
 
-```bash
-cmake -S . -B build-cuda -G Ninja -DNEXUS_ENABLE_CUDA=ON
-cd build-cuda
-ninja -j2
-```
+| task | command |
+| --- | --- |
+| compile and run | `nexusc compile prog.nx -S --regalloc linear-scan -o prog.s` then `mips-sim run prog.s --mode pipeline --cache assoc --stats` |
+| out-of-order core | `mips-sim run prog.s --mode advanced --scheduler tomasulo --issue-width 4 --predictor 2bit` |
+| compare ISAs | `nexusc isa prog.nx` |
+| grammars and automata | `nexusc grammar examples/grammars/lvalue.g lalr "* id = id"`, `nexusc regex '(a|b)*abb'` |
+| type inference | `nexusc infer "fun f -> fun x -> f (f x)"` |
+| SSA / SCCP | `nexusc analysis sccp tests/programs/constant_branches.nx` |
+| polyhedral | `nexusc poly examples/loops/wavefront.loop skew 2 1 1 interchange 1 2` |
+| arithmetic | `mips-sim arith float 0.1 add 0.2`, `mips-sim arith booth -3 5 4` |
+| Verilog CPU | `mips-sim encode prog.s -o prog.hex`, then see `docs/hdl/pipelined_cpu.md` |
+| GPU / manycore | `mips-sim run examples/gpu/strided.s --mode simt --threads 64`, `mips-sim run examples/parallel/spmd_sum.s --mode parallel --cores 64 --interconnect mesh` |
 
-Full low-memory test run:
+## Status and what remains
 
-```bash
-cd build
-ctest --output-on-failure -j1
-```
+Version 1.0.0 is complete for its purpose: the six course outlines are covered and tested. Possible
+extensions:
+- run the Verilog CPU on an FPGA board;
+- run the OpenMP, MPI and CUDA programs on a Linux machine with those toolchains;
+- add thread blocks and shared memory to the SIMT model;
+- add tiled code generation to the polyhedral tool.
 
-Compiler and simulator help:
+## Citation and license
 
-```bash
-./build/bin/nexusc --help
-./build/bin/mips-sim --help
-```
-
-Compile and run the factorial example:
-
-```bash
-./build/bin/nexusc compile examples/source_lang/factorial.nx -S -o /tmp/nexus_factorial.s
-./build/bin/mips-sim run /tmp/nexus_factorial.s --mode functional --stats
-```
-
-Representative trace and timeline commands:
-
-```bash
-./build/bin/mips-sim run tests/golden/pipeline_branch_demo.s --mode pipeline --predictor static-not-taken --trace
-./build/bin/mips-sim run tests/golden/pipeline_branch_demo.s --mode pipeline --predictor static-not-taken --timeline
-./build/bin/mips-sim run tests/golden/trace_demo.s --mode multi-cycle --control microcode --trace
-```
-
-Parallel wrapper and HDL helper:
-
-```bash
-./parallel-bench --all --build-dir ./build --repo-root .
-./hdl-test all
-```
-
-## Representative Results And Examples
-
-Representative functional run:
-
-```text
-Mode: functional
-Program exited with code 120
-Instructions: 203
-Cycles: 203
-```
-
-Representative pipeline branch-trace line showing forwarding, a misprediction, and a flush:
-
-```text
-trace[pipeline]: cycle=4 IF=I3@pc3:addiu ID=I2@pc2:addiu EX=I1@pc1:beq MEM=I0@pc0:addiu WB=- events=forward(rs<-EX/MEM(I0@pc0:addiu)); forward(rt<-EX/MEM(I0@pc0:addiu)); mispredict(beq -> pc=3); flush(ID:I2@pc2:addiu)
-```
-
-Representative timeline excerpt:
-
-```text
-I0@pc0:addiu | IF | ID | EX | MEM | WB
-I1@pc1:beq   | .  | IF | ID | EX  | MEM | WB
-I2@pc2:addiu | .  | .  | IF | ID!
-```
-
-Representative benchmark-wrapper summary:
-
-```text
-suite=openmp kernel=vector-add checksum=360 status=ok
-suite=mpi kernel=reduce checksum=110 status=ok
-suite=simd kernel=vector-add checksum=1488 status=ok
-suite=parallel case=coherence-demo cycles=9 status=ok
-suite=gpu kernel=vector-add status=skipped reason=cuda-disabled
-```
-
-Representative multi-cycle microcode trace:
-
-```text
-trace[multi-cycle]: cycle=1 control=microcode state=fetch pc=0 opcode=addiu signals={ir_write, mem_read, pc_write} action=microcode IF
-trace[multi-cycle]: cycle=2 control=microcode state=decode pc=0 opcode=addiu signals={reg_read} action=microcode ID
-trace[multi-cycle]: cycle=3 control=microcode state=execute-imm pc=0 opcode=addiu signals={alu} action=microcode EXI: ALUOut <- f(A, imm)
-```
-
-## Final Reports
-
-- final paper: `docs/reports/final_nexus_system_paper.md`
-- validation record: `docs/reports/validation_report.md`
-- course mapping: `docs/reports/course_mapping.md`
-- detailed checklist: `docs/reports/full_syllabus_checklist.md`
-- repository-wide truth audit: `docs/reports/repository_wide_truth_audit.md`
-- status snapshot: `STATUS.md`
-- roadmap snapshot: `ROADMAP.md`
-
-## Honest Boundaries
-
-- the core handwritten compiler path and the baseline simulator ladder are the stable instructional core
-- FPU-lite, L1+L2, Flex/Bison LR parsing, scoreboard scheduling, affine/locality work, the optional GPU path, and the HDL CPU slice are bounded executable experiments
-- several theory-heavy areas are covered through documentation and worked examples rather than executable industrial implementations
-- CUDA is optional, not mandatory
-- HDL coverage stops at validated modules and a bounded CPU slice, not a full synthesizable CPU
-- Tomasulo-style execution, reorder buffers, industrial SSA/register allocation, generalized ambiguity-supporting parsing, and large manycore research infrastructure remain outside bounded scope
+George David Tsitlauri, University of Thessaly, 2026. MIT License (`LICENSE`); citation metadata in
+`CITATION.cff`.

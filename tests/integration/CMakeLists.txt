@@ -172,3 +172,12 @@ add_test(
     "${PROJECT_SOURCE_DIR}/tests/integration/manycore_test.py"
     "$<TARGET_FILE:mips_sim>"
     "${PROJECT_SOURCE_DIR}")
+
+add_test(
+  NAME nexus_coverage_cli
+  COMMAND
+    "${Python3_EXECUTABLE}"
+    "${PROJECT_SOURCE_DIR}/tests/integration/coverage_cli_test.py"
+    "$<TARGET_FILE:nexusc>"
+    "$<TARGET_FILE:mips_sim>"
+    "${PROJECT_SOURCE_DIR}")

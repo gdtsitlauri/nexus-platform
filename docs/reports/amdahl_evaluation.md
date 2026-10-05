@@ -68,6 +68,6 @@ visible.
 - tiny workloads only; this is an educational measurement set
 - the report measures in-order and VLIW-lite scheduling only
 - scoreboard exists elsewhere in the repository but is not benchmarked here
-- Tomasulo-lite and reorder buffers remain outside bounded scope
+- the Tomasulo/ROB scheduler (added in 1.0.0) is measured in `docs/microarchitecture/tomasulo_rob_smt.md`
 - this report does not attempt later L1+L2 or multicore experiments
 - advanced-mode cycle counts are sandbox metrics, not hardware-validated timing numbers

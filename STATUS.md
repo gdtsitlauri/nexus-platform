@@ -2,54 +2,49 @@
 
 ## Snapshot
 
-- Date: 2026-04-22
-- Active phase: Phase 11 - HDL, literature, and final validation
-- Build status: verified from the existing `build/` tree
-- Full test status: verified, 56/56 passed
-- Runtime output directory: `build/bin`
+- Version: 1.0.0 (2026-10-05)
+- Scope: every topic of the six course outlines in `docs/course_outlines/` is implemented as code
+  with an automated test, except three toolchain-dependent demos (OpenMP, MPI, CUDA device run) and
+  three reading/history topics (see `docs/reports/full_syllabus_checklist.md`)
+- Build: CMake + Ninja, C++20; verified with Clang 22 (zig toolchain) on Windows 11
+- Tests: 65 CTest tests, 64 passed and 1 skipped (`nexus_toolchain_compare` needs `clang` in PATH);
+  the OpenMP and MPI benchmark tests are not registered when those toolchains are absent
+- HDL: Icarus Verilog for the 9 testbench suites and the RTL co-simulation, Yosys for synthesis
 
-## Current Classification
+## What 1.0.0 Added Over 0.11
 
-| Topic | Status | Evidence |
+| area | addition | test |
 | --- | --- | --- |
-| core compiler and CPU simulator baseline | fully implemented | `nexusc`, `mips-sim`, unit/integration/golden coverage |
-| FPU-lite demo | experimentally implemented | `nexus_fpu_lite_test`, `mips-sim fp-demo` |
-| L1+L2 hierarchy | experimentally implemented | `nexus_memory_cache_test`, `nexus_pipeline_memory_system_test`, `nexus_phase10_cli` |
-| Flex/Bison LR parser path | experimentally implemented | `nexus_experimental_parse_test`, `nexus_phase10_cli` |
-| scoreboard scheduler | experimentally implemented | `nexus_advanced_model_test`, `nexus_phase10_cli` |
-| affine/locality compiler slice | experimentally implemented | `nexus_affine_analysis_test`, `nexus_unroll_pass_test`, `nexus_phase10_cli` |
-| stronger GPU demo | experimentally implemented | `nexus_gpu_optional`, `parallel-bench --gpu` clean skip in CPU-only build |
-| HDL CPU slice | experimentally implemented | `nexus_hdl_cpu_slice`, `nexus_hdl_all` |
-| Tomasulo/reservation stations and generalized ambiguity-supporting parsing | documented with worked examples | `docs/microarchitecture/advanced_scheduling.md`, `docs/compiler/generalized_and_parallel_parsing.md` |
-| full synthesizable HDL CPU, mandatory device-backed GPU execution, reorder-buffer out-of-order engine, industrial SSA/register allocation | still outside bounded scope | final bounded-scope documentation |
+| compiler back end | linear-scan register allocation | `nexus_cross_model_differential` |
+| ISA comparison | stack (JVM-like), accumulator and register-memory (IA-32-like) back ends with interpreters | `nexus_isa_styles` |
+| formal languages | regex/NFA/DFA/minimal DFA, FIRST/FOLLOW, LL(1), LR(0)/SLR/LR(1)/LALR, Earley, S-attributed evaluation | `nexus_formal_test` |
+| type systems | Hindley-Milner inference | `nexus_type_inference_test` |
+| optimisation theory | SSA construction, SCCP | `nexus_ssa_test` |
+| loop optimisation | polyhedral dependence analysis, unimodular transformations, FM code generation | `nexus_polyhedral_test` |
+| microarchitecture | Tomasulo with ROB, renaming, CDB, store forwarding, RAS, deeper pipelines, 2-way SMT | `nexus_tomasulo_test` |
+| arithmetic | bit-exact IEEE-754 binary32 soft float, integer encodings, Booth, non-restoring division, CLA, UTF-8 | `nexus_number_systems_test` |
+| HDL | synthesisable 5-stage pipelined MIPS core, MIPS32 encoder, RTL/simulator co-simulation | `nexus_hdl_pipeline_cosim` |
+| parallel | SIMT GPU model, mesh and ring NoC, SPMD manycore (1-64 cores), asymmetric cores | `nexus_simt_test`, `nexus_manycore` |
+| portability | Python HDL runner, optional OpenMP/MPI, Windows-friendly integration tests | full `ctest` on Windows |
 
-## Exact Commands Used In This Audit
+## Defects Found and Fixed In Existing Code
 
-```bash
-cd build
-ninja -j2
-ctest --output-on-failure -j1 -R '^nexus_fpu_lite_test$'
-ctest --output-on-failure -j1 -R '^(nexus_memory_cache_test|nexus_pipeline_memory_system_test|nexus_phase10_cli)$'
-ctest --output-on-failure -j1 -R '^nexus_experimental_parse_test$'
-ctest --output-on-failure -j1 -R '^nexus_advanced_model_test$'
-ctest --output-on-failure -j1 -R '^(nexus_affine_analysis_test|nexus_unroll_pass_test)$'
-ctest --output-on-failure -j1 -R '^nexus_gpu_optional$'
-ctest --output-on-failure -j1 -R '^(nexus_hdl_cpu_slice|nexus_hdl_all)$'
-ctest --output-on-failure -j1
-```
+1. **Pipeline with caches gave wrong results.** With `--cache direct|assoc`, `factorial` returned 0
+   instead of 120 and recursive programs failed with out-of-bounds accesses. Cause: an instruction
+   held in ID/EX during a multi-cycle memory freeze kept the operand values it read at decode, while
+   its producer drained through write-back and left the forwarding window. A second path let the
+   load-use stall overwrite a frozen EX/MEM register. Both are fixed in `src/sim/pipeline/src/model.cpp`.
+2. **Passing a row of a 2-D array used the wrong address** (`row_sum(grid[1])` read row 0 data
+   scaled wrongly; a test program returned 125 instead of 270). The MIPS back end did not scale a
+   partial index by the size of the selected sub-array. Fixed in `codegen.cpp`.
+
+Both are covered by `nexus_cross_model_differential` (`tests/programs/array_rows.nx` and every
+program on the cached pipeline).
 
 ## Intentional Limits
 
-- CUDA is optional only
-- HDL modules and the CPU slice are bounded teaching artifacts rather than a full CPU implementation
-- scoreboard, L1+L2, and affine/locality work are educational prototypes with focused tests
-- several large topics remain documentation-backed rather than industrially executable
-
-## Final Documentation Set
-
-- overview and usage: `README.md`
-- final paper: `docs/reports/final_nexus_system_paper.md`
-- validation record: `docs/reports/validation_report.md`
-- course mapping: `docs/reports/course_mapping.md`
-- detailed checklist: `docs/reports/full_syllabus_checklist.md`
-- repository-wide truth audit: `docs/reports/repository_wide_truth_audit.md`
+- the simulators are educational models: the Tomasulo core is trace-driven, the SIMT model has no
+  thread blocks or shared memory, and cycle counts are model metrics, not hardware measurements;
+- the HDL core is verified in simulation and synthesised generically, not placed and routed on an FPGA;
+- NexusLang has `int`, `bool` and arrays only (no floating point, pointers or globals);
+- OpenMP, MPI and CUDA demos need their toolchains and were not run on the Windows verification host.

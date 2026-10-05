@@ -6,7 +6,8 @@ Phase 2 adds concrete formal foundations material that directly maps to the fron
 
 - `docs/compiler/language_spec.md` defines the bounded NexusLang grammar in EBNF.
 - the recursive-descent parser consumes an LL-friendly spelling of that grammar
-- LR concepts are documented for comparison, but not implemented yet
+- LR(0), SLR(1), canonical LR(1) and LALR(1) table construction and parsing are implemented in
+  `src/compiler/formal/` (`nexusc grammar`); see `docs/compiler/formal_languages_toolkit.md`
 
 Worked example:
 

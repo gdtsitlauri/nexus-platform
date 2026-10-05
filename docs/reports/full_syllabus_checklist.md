@@ -1,203 +1,123 @@
-# Full Syllabus Checklist
+# Full Syllabus Checklist (version 1.0.0)
 
-This checklist tracks the strongest currently supported evidence for each major course topic in the
-final Nexus repository state.
-
-## Audit Inputs
-
-This checklist was cross-checked against:
-
-- repository contract files: `README.md`, `ROADMAP.md`, `STATUS.md`, `ARCHITECTURE.md`, `CHANGELOG.md`
-- code, tests, examples, scripts, tools, benchmarks, and CMake targets
-- six syllabus PDFs available during the 2026-04-22 audit
-
-Five PDFs were present at the repo-local paths listed under `data/`. The sixth syllabus was not
-present at `/mnt/data/...`, but an identically named repo-local copy under `data/` was available
-and was used as the formal source for Course 6.
+Every topic of the six course outlines in `docs/course_outlines/` mapped to the code that implements
+it and the automated test that checks it. Test names are CTest names (`ctest -R <name>`).
 
 ## Status Legend
 
-- fully implemented
-- experimentally implemented
-- documented with worked examples
-- still outside bounded scope
-- implemented
-- pending
-- legacy audit term retained for compatibility: pending
+- **implemented and tested**: executable code plus an automated check in `ctest`
+- **implemented, toolchain-dependent**: executable code whose test runs only when an external
+  toolchain is installed (OpenMP compiler, MPI, CUDA, clang); the test is skipped otherwise
+- **notes**: topics that are not programs (history, reading lists, taxonomies); covered in `docs/`
 
-## 1. Principles of Computer Operation
+No topic of the six outlines is left outside the project.
 
-| Topic | Status | Evidence |
-| --- | --- | --- |
-| general computer organization | experimentally implemented | `ARCHITECTURE.md`, `src/sim/single_cycle/`, `src/sim/multi_cycle/`, `src/sim/pipeline/` |
-| MIPS assembly programming | fully implemented | `docs/architecture/mips_isa.md`, `nexusc compile`, `mips-sim run` |
-| registers, memory, stack, subroutines | fully implemented | stack frames, `jal`/`jr`, `lw`/`sw`, simulator tests |
-| accumulator-based ISA concepts | documented with worked examples | `docs/architecture/isa_comparison.md` |
-| stack-based ISA concepts | documented with worked examples | `docs/architecture/isa_comparison.md` |
-| general-purpose-register ISA concepts | fully implemented | MIPS backend and simulator |
-| IA-32 concepts | documented with worked examples | `docs/architecture/isa_comparison.md` |
-| Java bytecode concepts | documented with worked examples | `docs/architecture/isa_comparison.md` |
-| signed integer representation | experimentally implemented | `docs/architecture/data_representation.md`, arithmetic helpers/tests |
-| unsigned integer representation | experimentally implemented | `docs/architecture/data_representation.md`, unsigned compare support |
-| fixed-point concepts | experimentally implemented | `src/common/src/fpu_lite.cpp`, `tests/unit/fpu_lite_test.cpp` |
-| floating-point concepts | experimentally implemented | `src/common/src/fpu_lite.cpp`, `mips-sim fp-demo`, `tests/unit/fpu_lite_test.cpp` |
-| non-numeric data representation | documented with worked examples | `docs/architecture/data_representation.md` |
-| arithmetic algorithms and hardware overview | experimentally implemented | arithmetic helpers, HDL arithmetic modules, docs |
-| adders | experimentally implemented | `src/common/src/arithmetic.cpp`, `src/hdl/alu/nexus_adder.v`, tests |
-| multipliers | experimentally implemented | shift-add helpers, `src/hdl/alu/nexus_iterative_multiplier.v`, tests |
-| dividers | experimentally implemented | restoring divide helpers, `src/hdl/alu/nexus_iterative_divider.v`, tests |
-| FPU-lite demo path | experimentally implemented | `src/common/include/nexus/common/fpu_lite.hpp`, `src/common/src/fpu_lite.cpp`, `tests/unit/fpu_lite_test.cpp` |
+## 1. NEY221 Principles of Computer Operation
 
-## 2. Computer Organization
+| Topic | Status | Code | Test |
+| --- | --- | --- | --- |
+| computer organization overview | implemented and tested | `src/sim/` (functional to pipelined models), `ARCHITECTURE.md` | `nexus_cross_model_differential` |
+| MIPS assembly programming, registers, memory, stack, subroutines | implemented and tested | `src/mips/`, `src/sim/functional/`, `nexusc compile` | `nexus_mips_functional_test`, `nexus_phase6_golden` |
+| accumulator ISA | implemented and tested | `src/compiler/isa_styles/` (`nexusc isa --style accumulator`) | `nexus_isa_styles` |
+| stack ISA and Java bytecode (JVM-like) | implemented and tested | `src/compiler/isa_styles/` (`--style stack`: iload/istore, if_icmpXX, invokestatic, iaload) | `nexus_isa_styles` |
+| general-purpose-register (load/store) ISA | implemented and tested | MIPS back end | `nexus_backend_mips_test` |
+| IA-32 (register-memory, two-address) | implemented and tested | `src/compiler/isa_styles/` (`--style register-memory`: mov/add/imul/idiv/setcc, [ebp+d], [base+index*4], cdecl) | `nexus_isa_styles` |
+| ISA trade-offs (code size, instruction count, memory traffic) | implemented and tested | `nexusc isa <file>` comparison table | `nexus_isa_styles` |
+| signed/unsigned integers: sign-magnitude, one's and two's complement, excess-K, BCD | implemented and tested | `src/common/src/number_systems.cpp` (`mips-sim arith repr`) | `nexus_number_systems_test` |
+| fixed point | implemented and tested | `src/common/src/fpu_lite.cpp` (Q8.8) | `nexus_fpu_lite_test` |
+| floating point (IEEE-754 binary32) | implemented and tested | `soft_add/sub/mul/div`: round-to-nearest-even, subnormals, signed zero, Inf/NaN, bit-exact with hardware (`mips-sim arith float`) | `nexus_number_systems_test` (2M random pairs x 4 ops) |
+| non-numeric data (characters, UTF-8) | implemented and tested | strict UTF-8 encoder/decoder (`mips-sim arith utf8`) | `nexus_number_systems_test` |
+| adders (ripple carry, carry lookahead) | implemented and tested | `src/common/src/arithmetic.cpp`, `carry_lookahead_add`, `src/hdl/alu/nexus_adder.v` | `nexus_arithmetic_units_test`, `nexus_number_systems_test`, `nexus_hdl_adder` |
+| multipliers (shift-add, Booth radix-2) | implemented and tested | `arithmetic.cpp`, `booth_multiply` (`mips-sim arith booth`), `nexus_iterative_multiplier.v` | `nexus_number_systems_test`, `nexus_hdl_multiplier` |
+| dividers (restoring, non-restoring) | implemented and tested | `arithmetic.cpp`, `nonrestoring_divide` (`mips-sim arith divide`), `nexus_iterative_divider.v` | `nexus_number_systems_test`, `nexus_hdl_divider` |
 
-| Topic | Status | Evidence |
-| --- | --- | --- |
-| modern computer organization | experimentally implemented | simulator stack plus architecture docs |
-| history of computing evolution | documented with worked examples | `docs/reports/history_of_computing_evolution.md` |
-| ISA and arithmetic foundations review | documented with worked examples | `docs/architecture/mips_isa.md`, `docs/architecture/isa_comparison.md` |
-| MIPS machine-level instruction understanding | fully implemented | backend, loader, interpreter, docs |
-| CPU datapath and control | experimentally implemented | single-cycle/multi-cycle/pipeline code plus docs |
-| micro-operations | experimentally implemented | multi-cycle sequencing and trace output |
-| single-cycle execution model | fully implemented | `src/sim/single_cycle/`, tests |
-| multi-cycle execution model | fully implemented | `src/sim/multi_cycle/`, tests |
-| hardwired control | fully implemented | control decode in single-cycle and multi-cycle modes; HDL control unit |
-| microprogrammed control | fully implemented | multi-cycle microcode control mode |
-| pipelining | fully implemented | `src/sim/pipeline/`, tests, docs |
-| hazards | fully implemented | `docs/microarchitecture/hazards.md`, pipeline tests |
-| forwarding/bypassing | fully implemented | pipeline forwarding logic and tests |
-| stalls/freezes | fully implemented | load-use stall logic and timeline markers |
-| basic branch prediction | fully implemented | static pipeline predictors and tests |
-| memory hierarchy | experimentally implemented | `src/sim/memory/`, cache docs, cache tests |
-| L1+L2 hierarchy | experimentally implemented | `src/sim/memory/`, `tests/unit/memory_cache_test.cpp`, `tests/unit/pipeline_memory_system_test.cpp`, CLI coverage |
-| I/O subsystems | experimentally implemented | `src/sim/io/`, tests, demos |
-| buses | experimentally implemented | `src/sim/parallel/`, `docs/parallel/interconnects.md` |
-| interrupts | experimentally implemented | timer interrupt path, tests, demos |
-| DMA | experimentally implemented | DMA controller path, tests, demos |
-| performance evaluation techniques | experimentally implemented | benchmark and metrics scripts, reports |
-| HDL-oriented laboratory support | experimentally implemented | `src/hdl/`, `scripts/test_hdl.sh`, HDL testbenches |
-| HDL CPU slice | experimentally implemented | `src/hdl/cpu_slice/nexus_cpu_slice.v`, `src/hdl/cpu_slice/cpu_slice_tb.v`, HDL tests |
+## 2. EY321 Computer Organization
 
-## 3. Compilers
+| Topic | Status | Code | Test |
+| --- | --- | --- | --- |
+| history of computing | notes | `docs/reports/history_of_computing_evolution.md` | `nexus_report_docs` |
+| MIPS machine code | implemented and tested | MIPS32 encoder (`mips-sim encode`) | `nexus_hdl_pipeline_cosim` |
+| datapath and control, micro-operations | implemented and tested | `src/sim/single_cycle/`, `src/sim/multi_cycle/` | `nexus_single_cycle_model_test`, `nexus_multi_cycle_model_test` |
+| hardwired control | implemented and tested | single/multi-cycle control, `src/hdl/control/` | `nexus_multi_cycle_model_test`, `nexus_hdl_control` |
+| microprogrammed control | implemented and tested | multi-cycle `--control microcode` | `nexus_multi_cycle_model_test` |
+| pipelining, hazards, forwarding, stalls | implemented and tested | `src/sim/pipeline/` | `nexus_pipeline_model_test`, `nexus_cross_model_differential` |
+| branch prediction | implemented and tested | static predictors (pipeline), 2-bit (advanced) | `nexus_advanced_predictor_test` |
+| memory hierarchy, L1 + L2 caches | implemented and tested | `src/sim/memory/` | `nexus_memory_cache_test`, `nexus_pipeline_memory_system_test` |
+| I/O, buses, interrupts, DMA | implemented and tested | `src/sim/io/` | `nexus_io_system_test` |
+| performance evaluation (CPI, IPC, speedup) | implemented and tested | `--stats` on every model, `scripts/run_benchmarks.py` | `nexus_phase7_benchmarks` |
+| HDL laboratory: ALU, register file, control, pipeline registers | implemented and tested | `src/hdl/` | `nexus_hdl_*` |
+| complete CPU in HDL | implemented and tested | `src/hdl/cpu_pipeline/nexus_mips_pipeline.v`: synthesisable 5-stage MIPS (forwarding, load-use interlock, branch flush, mult/div) | `nexus_hdl_pipeline_cosim` (RTL vs simulator, plus Yosys synthesis) |
 
-| Topic | Status | Evidence |
-| --- | --- | --- |
-| grammars, languages, automata, and state machines | documented with worked examples | `docs/compiler/formal_foundations.md`, `examples/formal/` |
-| trees, graphs, hash tables, traversal and closure algorithms | documented with worked examples | `docs/compiler/formal_foundations.md`, examples |
-| handwritten lexical analysis | fully implemented | lexer code and tests |
-| Flex-based lexical analysis | experimentally implemented | `src/compiler/experimental_parallel_parsing/src/flex_bison_lexer.l`, experimental parse tests |
-| manual syntax analysis where feasible | fully implemented | parser code and tests |
-| Bison-based syntax analysis | experimentally implemented | `src/compiler/experimental_parallel_parsing/src/flex_bison_parser.y`, `nexusc experimental-parse --mode bison-lr` |
-| LL parsing concepts | documented with worked examples | `docs/compiler/formal_foundations.md` |
-| LR parsing concepts | experimentally implemented | experimental `bison-lr` path, docs, tests |
-| AST construction | fully implemented | AST headers, parser tests, `nexusc ast` |
-| source-language functions | fully implemented | parser, semantics, IR lowering, code generation, examples |
-| source-language conditionals | fully implemented | parser, AST, IR lowering, simulator-backed examples |
-| source-language loops | fully implemented | parser, AST, IR lowering, optimization tests |
-| source-language recursion | fully implemented | `examples/source_lang/factorial.nx`, end-to-end compile/run flow |
-| source-language arrays | fully implemented | frontend type system, IR lowering, backend support, examples |
-| diagnostics with line and column support | fully implemented | lexer/parser/semantic diagnostics and negative tests |
-| semantic analysis | fully implemented | semantic analyzer, tests |
-| type checking | fully implemented | semantic analyzer, negative tests |
-| symbol tables | fully implemented | nested scope maps |
-| attribute-inspired semantic methodology | documented with worked examples | `docs/compiler/semantic_models.md` |
-| AST-oriented intermediate code | fully implemented | IR lowering, tests |
-| quadruple or three-address-code-like IR | fully implemented | `src/compiler/ir/`, `docs/compiler/ir.md` |
-| final code generation | fully implemented | `src/compiler/backend_mips/`, end-to-end tests |
-| instruction selection | fully implemented | bounded IR-to-MIPS lowering |
-| register allocation | documented with worked examples | `docs/compiler/optimizations.md`, `docs/architecture/mips_isa.md` |
-| stack-frame layout | fully implemented | `docs/architecture/mips_isa.md`, backend lowering, call tests |
-| function calls and returns | fully implemented | `jal`/`jr` support, backend lowering, functional simulator tests |
-| functional ISA execution | fully implemented | `src/sim/functional/`, tests, `mips-sim --mode functional` |
-| introductory optimization | experimentally implemented | symbolic simplification, loop unrolling, affine strip-mining, interprocedural folding |
-| complete educational compiler integration | fully implemented | `nexusc`, `mips-sim`, end-to-end tests |
+## 3. NEY613 Compilers
 
-## 4. Computer Architecture
+| Topic | Status | Code | Test |
+| --- | --- | --- | --- |
+| grammars, languages, automata | implemented and tested | `src/compiler/formal/`: regex -> Thompson NFA -> subset DFA -> minimal DFA (`nexusc regex`) | `nexus_formal_test` (vs `std::regex`) |
+| hand-written lexer | implemented and tested | `src/compiler/frontend/src/lexer.cpp` | `nexus_frontend_lexer_test` |
+| Flex lexer | implemented and tested | `experimental_parallel_parsing/src/flex_bison_lexer.l` | `nexus_experimental_parse_test` |
+| recursive-descent (LL) parser | implemented and tested | `src/compiler/frontend/src/parser.cpp` | `nexus_frontend_parser_test` |
+| LL(1): FIRST/FOLLOW, parse table, predictive parsing, left-recursion elimination, left factoring | implemented and tested | `nexusc grammar <g> first-follow / ll1 / transform` | `nexus_formal_test` |
+| LR parsing: LR(0), SLR(1), canonical LR(1), LALR(1) tables and parsing | implemented and tested | `nexusc grammar <g> lr0 / slr / lr1 / lalr` | `nexus_formal_test` |
+| Bison LR parser | implemented and tested | `flex_bison_parser.y` (`experimental-parse --mode bison-lr`) | `nexus_experimental_parse_test` |
+| AST construction | implemented and tested | `nexusc ast` | `nexus_frontend_parser_test` |
+| semantic analysis, type checking, symbol tables | implemented and tested | `src/compiler/semantics/` | `nexus_semantics_test` |
+| attribute grammars | implemented and tested | S-attributed actions `{ $$ = $1 + $3 }` evaluated on LL and LR parse trees | `nexus_formal_test` |
+| intermediate code: AST, three-address code, quadruples | implemented and tested | `src/compiler/ir/` (`nexusc ir`, `nexusc quads`) | `nexus_ir_lowering_test`, `nexus_coverage_cli` |
+| code generation, instruction selection, stack frames, calls | implemented and tested | `src/compiler/backend_mips/` | `nexus_backend_mips_test`, `nexus_cross_model_differential` |
+| register allocation | implemented and tested | linear scan (`--regalloc linear-scan`, `nexusc analysis regalloc`) | `nexus_cross_model_differential`, `nexus_hdl_pipeline_cosim` |
+| introductory optimisation | implemented and tested | folding, unrolling, SCCP | `nexus_unroll_pass_test`, `nexus_ssa_test` |
+| complete compiler (source to running machine code) | implemented and tested | `nexusc` + `mips-sim` + RTL core | `nexus_phase10_cli`, `nexus_hdl_pipeline_cosim` |
 
-| Topic | Status | Evidence |
-| --- | --- | --- |
-| performance evaluation with benchmarks | experimentally implemented | benchmark scripts and reports |
-| Amdahl's law | experimentally implemented | Phase 8 scripts and `docs/reports/amdahl_evaluation.md` |
-| branch miss-rate / predictor comparison | experimentally implemented | advanced predictor tests, stats output, `docs/microarchitecture/branch_prediction.md` |
-| deeper pipelining | documented with worked examples | `docs/microarchitecture/pipeline.md` |
-| superscalar concepts | experimentally implemented | width-2 issue experiments |
-| out-of-order execution concepts | documented with worked examples | `docs/microarchitecture/advanced_scheduling.md` |
-| scoreboard concepts | experimentally implemented | `src/sim/advanced/src/model.cpp`, `tests/unit/advanced_model_test.cpp`, CLI coverage |
-| reservation-station or Tomasulo-lite concepts | documented with worked examples | `docs/microarchitecture/advanced_scheduling.md` |
-| static scheduling | experimentally implemented | Phase 8 VLIW-lite scheduling |
-| VLIW concepts | experimentally implemented | advanced-mode VLIW-lite traces and docs |
-| branch prediction | fully implemented | pipeline and advanced predictor support |
-| speculative execution concepts | experimentally implemented | advanced-mode speculative flush accounting |
-| advanced memory/peripheral organization | experimentally implemented | bounded cache, L1+L2, I/O, interrupt, DMA models |
-| multiprocessors and multicomputers introduction | experimentally implemented | `src/sim/parallel/`, docs |
-| cache coherence | experimentally implemented | `--coherence snoop|directory-lite`, tests |
-| memory consistency | experimentally implemented | `--consistency sc|weak-lite`, tests |
-| synchronization | experimentally implemented | lock/barrier/atomic support and tests |
-| literature-study integration | documented with worked examples | `docs/literature/architecture_readings.md` |
-| architecture-oriented simulation or HDL implementation | experimentally implemented | simulator stack plus HDL modules/testbenches |
-| HDL ALU module | experimentally implemented | `src/hdl/alu/nexus_alu.v`, `src/hdl/alu/alu_tb.v` |
-| HDL adder module | experimentally implemented | `src/hdl/alu/nexus_adder.v`, `src/hdl/alu/adder_tb.v` |
-| HDL register-file module | experimentally implemented | `src/hdl/register_file/nexus_register_file.v`, testbench |
-| HDL multiplier module | experimentally implemented | `src/hdl/alu/nexus_iterative_multiplier.v`, testbench |
-| HDL divider module | experimentally implemented | `src/hdl/alu/nexus_iterative_divider.v`, testbench |
-| HDL control-unit module | experimentally implemented | `src/hdl/control/nexus_control_unit.v`, testbench |
-| HDL pipeline-register module | experimentally implemented | `src/hdl/pipeline_regs/nexus_pipeline_reg.v`, testbench |
-| HDL CPU slice | experimentally implemented | `src/hdl/cpu_slice/nexus_cpu_slice.v`, `tests/integration/CMakeLists.txt` |
-| full synthesizable HDL CPU | still outside bounded scope | bounded Phase 11 scope stops at validated modules and a CPU slice |
+## 4. NEY606 Computer Architecture
 
-## 5. Advanced Compiler Topics
+| Topic | Status | Code | Test |
+| --- | --- | --- | --- |
+| performance, benchmarks, Amdahl's law | implemented and tested | `scripts/generate_amdahl_report.py`, `scripts/run_benchmarks.py` | `nexus_phase8_amdahl`, `nexus_phase7_benchmarks` |
+| deeper pipelines | implemented and tested | `--pipeline-depth N` (redirect penalty grows with depth) | `nexus_tomasulo_test`, `nexus_coverage_cli` |
+| superscalar issue | implemented and tested | `--issue-width 2` (in order), `--issue-width 1-4` (Tomasulo) | `nexus_advanced_model_test`, `nexus_tomasulo_test` |
+| dynamic scheduling: scoreboard | implemented and tested | `--scheduler scoreboard` | `nexus_advanced_model_test` |
+| dynamic scheduling: Tomasulo, reservation stations, register renaming, CDB | implemented and tested | `--scheduler tomasulo` | `nexus_tomasulo_test` |
+| static scheduling, VLIW | implemented and tested | `--scheduler vliw-lite` | `nexus_advanced_model_test`, `nexus_phase8_golden` |
+| branch prediction, speculation, reorder buffer, return-address stack | implemented and tested | 2-bit predictor, ROB with in-order commit, RAS | `nexus_tomasulo_test` |
+| memory and peripherals | implemented and tested | caches, I/O, DMA | `nexus_pipeline_memory_system_test`, `nexus_io_system_test` |
+| multiprocessors: coherence, consistency, synchronisation | implemented and tested | `src/sim/parallel/` | `nexus_coherence_test`, `nexus_consistency_test`, `nexus_parallel_model_test` |
+| literature study | notes | `docs/literature/architecture_readings.md` | `nexus_literature_docs` |
 
-| Topic | Status | Evidence |
-| --- | --- | --- |
-| generalized parsing | documented with worked examples | `docs/compiler/generalized_and_parallel_parsing.md` |
-| parallel parsing | experimentally implemented | `src/compiler/experimental_parallel_parsing/`, tests |
-| Flex/Bison LR parser path | experimentally implemented | `src/compiler/experimental_parallel_parsing/`, `tests/unit/experimental_parse_test.cpp`, CLI coverage |
-| advanced type-system topics | documented with worked examples | `docs/compiler/semantic_models.md` |
-| intermediate representations for optimization | fully implemented | IR docs and code |
-| CFGs and basic blocks | fully implemented | CFG code and tests |
-| dominators | fully implemented | dominator code and tests |
-| convergence points and lattices | documented with worked examples | `docs/compiler/optimizations.md` |
-| iterative data-flow analysis | fully implemented | baseline solver and liveness |
-| region-based or non-iterative data-flow analysis | experimentally implemented | `src/compiler/analysis/src/region_flow.cpp` |
-| expression optimization | experimentally implemented | symbolic simplification and constant-call folding |
-| symbolic analysis | experimentally implemented | `src/compiler/analysis/src/symbolic.cpp` |
-| concrete loop unrolling | experimentally implemented | `src/compiler/passes/src/loop_unroll.cpp` |
-| symbolic loop unrolling | experimentally implemented | `src/compiler/passes/src/loop_unroll.cpp` |
-| affine analysis and strip-mining | experimentally implemented | `src/compiler/analysis/src/affine_analysis.cpp`, `src/compiler/passes/src/affine_stripmine.cpp`, focused tests |
-| locality-oriented loop transformations | experimentally implemented | affine/locality analysis plus strip-mining notes and tests |
-| polyhedral-inspired affine loop transformations | experimentally implemented | bounded affine analysis and strip-mining, `docs/compiler/loop_optimizations.md` |
-| pointer and alias analysis | experimentally implemented | bounded alias analysis, tests |
-| interprocedural optimization | experimentally implemented | summaries plus constant-call folding |
-| literature-study integration | documented with worked examples | `docs/literature/compiler_readings.md` |
-| ambiguity-supporting generalized parser (GLR/Earley class) | still outside bounded scope | theory is documented, but no executable generalized parser is shipped |
-| industrial SSA, register allocation, and polyhedral optimizer depth | still outside bounded scope | final repository remains bounded and non-SSA |
+## 5. NEY709 Advanced Compiler Topics
 
-## 6. Parallel Systems and Parallel Programming
+| Topic | Status | Code | Test |
+| --- | --- | --- | --- |
+| generalized parsing (ambiguous grammars) | implemented and tested | Earley parser with parse-tree counting (`nexusc grammar <g> earley`) | `nexus_formal_test` |
+| parallel parsing | implemented and tested | `experimental-parse --mode parallel` | `nexus_experimental_parse_test` |
+| type systems | implemented and tested | Hindley-Milner (Algorithm W) with let-polymorphism and occurs check (`nexusc infer`) | `nexus_type_inference_test` |
+| intermediate representations, SSA | implemented and tested | `src/compiler/analysis/src/ssa.cpp`: dominance frontiers, phi placement, renaming (`analysis ssa`) | `nexus_ssa_test` |
+| CFG, basic blocks, dominators | implemented and tested | `cfg.cpp`, `dominators.cpp` | `nexus_cfg_analysis_test` |
+| lattices and convergence | implemented and tested | SCCP over the constant lattice (`analysis sccp`) | `nexus_ssa_test` |
+| iterative data-flow analysis | implemented and tested | `data_flow.cpp`, `liveness.cpp` | `nexus_cfg_analysis_test` |
+| region-based data-flow analysis | implemented and tested | `region_flow.cpp` | `nexus_phase10_cli` |
+| expression optimisation, symbolic analysis | implemented and tested | `symbolic.cpp` | `nexus_symbolic_analysis_test` |
+| loop unrolling | implemented and tested | `loop_unroll.cpp` | `nexus_unroll_pass_test` |
+| polyhedral model, linear inequalities | implemented and tested | `src/compiler/polyhedral/`: Fourier-Motzkin dependence tests, distance/direction vectors, unimodular transforms, FM loop-bound generation (`nexusc poly`) | `nexus_polyhedral_test` |
+| affine analysis and strip-mining | implemented and tested | `affine_analysis.cpp`, `affine_stripmine.cpp` | `nexus_affine_analysis_test` |
+| pointer and alias analysis | implemented and tested | `alias_analysis.cpp` | `nexus_alias_analysis_test` |
+| interprocedural analysis | implemented and tested | `interprocedural.cpp`, `interprocedural_pass.cpp` | `nexus_interproc_test` |
+| literature study | notes | `docs/literature/compiler_readings.md` | `nexus_literature_docs` |
 
-| Topic | Status | Evidence |
-| --- | --- | --- |
-| taxonomy of parallel architectures | documented with worked examples | `docs/parallel/overview.md`, `docs/parallel/interconnects.md` |
-| multithreaded and simultaneous multithreaded systems | documented with worked examples | `docs/parallel/overview.md` |
-| shared-memory systems | experimentally implemented | `src/sim/parallel/`, tests |
-| distributed-memory systems | experimentally implemented | `benchmarks/mpi/mpi_bench.cpp`, docs |
-| symmetric multiprocessors | experimentally implemented | bounded 2-4 core model |
-| asymmetric multiprocessors | documented with worked examples | `docs/parallel/overview.md` |
-| homogeneous systems | experimentally implemented | shared-core educational model |
-| heterogeneous systems | experimentally implemented | `benchmarks/simd/simd_bench.cpp`, `benchmarks/gpu_optional/gpu_optional_bench.cu`, `docs/parallel/overview.md`, `docs/parallel/openmp_mpi_gpu.md` |
-| snooping coherence models | experimentally implemented | `--coherence snoop`, tests |
-| directory-based coherence models | experimentally implemented | `--coherence directory-lite`, tests |
-| memory consistency models | experimentally implemented | `--consistency sc|weak-lite`, tests |
-| synchronization mechanisms in hardware and software | experimentally implemented | lock/barrier/atomic support, OpenMP/MPI examples |
-| OpenMP programming | experimentally implemented | `openmp-bench`, integration tests |
-| MPI programming | experimentally implemented | `mpi-bench`, integration tests |
-| vector and SIMD programming | experimentally implemented | `simd-bench`, integration tests |
-| GPU computing and programming | experimentally implemented | optional `gpu-bench`, `docs/parallel/openmp_mpi_gpu.md`, clean skip behavior |
-| buses, switches, and networks-on-chip | experimentally implemented | interconnect demos and tests |
-| simulation and HDL support for a parallel-system case study | experimentally implemented | bounded parallel simulator with focused tests; HDL support remains generic CPU-side rather than parallel-specific |
-| literature notes and reading summaries | documented with worked examples | `docs/literature/*.md` |
-| mandatory device-backed GPU execution | still outside bounded scope | CUDA is intentionally optional and not required for repository success |
-| large manycore or full-coherence research platform | still outside bounded scope | final parallel layer remains bounded and educational |
+## 6. NEY704 Parallel Systems and Parallel Programming
 
-## Update Policy
-
-Status remains conservative and evidence-linked. Topics are only moved above `still outside bounded
-scope` when the repository contains matching code, tests, documentation, or worked examples.
+| Topic | Status | Code | Test |
+| --- | --- | --- | --- |
+| taxonomy of parallel architectures (Flynn) | notes | `docs/parallel/overview.md` | `nexus_report_docs` |
+| multithreading, simultaneous multithreading | implemented and tested | 2-way SMT on the Tomasulo core (`--smt <thread1.s>`, ICOUNT fetch) | `nexus_tomasulo_test` |
+| shared-memory multiprocessors | implemented and tested | `--mode parallel`, SPMD `worker` entry for any core count | `nexus_parallel_model_test`, `nexus_manycore` |
+| distributed memory, message passing (MPI) | implemented, toolchain-dependent | `benchmarks/mpi/mpi_bench.cpp` | `nexus_mpi_benchmark` (needs `mpicxx`) |
+| symmetric and asymmetric multiprocessors | implemented and tested | `--core-cpi 1,1,4,4` (big/little cores) | `nexus_manycore` |
+| snooping and directory coherence | implemented and tested | `--coherence snoop / directory-lite` | `nexus_coherence_test` |
+| memory consistency, synchronisation | implemented and tested | `--consistency sc / weak-lite`, locks, barriers, atomics | `nexus_consistency_test`, `nexus_phase10_golden` |
+| OpenMP | implemented, toolchain-dependent | `benchmarks/openmp/openmp_bench.cpp` | `nexus_openmp_benchmark` (needs an OpenMP compiler) |
+| vector and SIMD programming | implemented and tested | `benchmarks/simd/simd_bench.cpp` | `nexus_simd_benchmark` |
+| GPUs and SIMT execution | implemented and tested | `src/sim/simt/`: warps, reconvergence stack, SIMD efficiency, memory coalescing (`--mode simt`) | `nexus_simt_test` |
+| GPU programming on a device (CUDA) | implemented, toolchain-dependent | `benchmarks/gpu_optional/gpu_optional_bench.cu` | `nexus_gpu_optional` (needs `nvcc`) |
+| interconnects: bus, switch, ring, 2-D mesh NoC | implemented and tested | `--interconnect bus / switch / ring / mesh / noc-lite` | `nexus_interconnect_test`, `nexus_manycore` |
+| manycore (up to 64 cores) | implemented and tested | SPMD reduction on 1-64 cores | `nexus_manycore` |
+| literature study | notes | `docs/literature/parallel_readings.md` | `nexus_literature_docs` |

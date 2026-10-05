@@ -1,91 +1,47 @@
-# Validation Report
+# Validation Report (version 1.0.0)
 
-This report records the completed gap-closure audit against the current Phase 11 repository state.
+## Environment
 
-## Audit Context
+- Date: 2026-10-05
+- Host: Windows 11 Pro, 12-core CPU
+- Toolchain: CMake 3.30.5, Ninja 1.12.1, Clang 22 (zig c++), win_flex/win_bison 2.5.25, Python 3.12,
+  Icarus Verilog and Yosys from the OSS CAD Suite
+- Build: `cmake -S . -B build -G Ninja && cmake --build build` (150 targets, no errors)
 
-- Date: 2026-04-22
-- Build tree used: existing `build/`
-- Validation mode: low-memory only
-- Build result: `ninja -j2` succeeded with `ninja: no work to do.`
-- Full-suite result: `ctest --output-on-failure -j1` passed, 56/56 tests
-- Companion examiner report: `docs/reports/repository_wide_truth_audit.md`
-
-## Key Validation Commands Executed
+## Full Suite
 
 ```bash
-cd build
-ninja -j2
-ctest --output-on-failure -j1 -R '^nexus_fpu_lite_test$'
-ctest --output-on-failure -j1 -R '^(nexus_memory_cache_test|nexus_pipeline_memory_system_test|nexus_phase10_cli)$'
-ctest --output-on-failure -j1 -R '^nexus_experimental_parse_test$'
-ctest --output-on-failure -j1 -R '^nexus_advanced_model_test$'
-ctest --output-on-failure -j1 -R '^(nexus_affine_analysis_test|nexus_unroll_pass_test)$'
-ctest --output-on-failure -j1 -R '^nexus_gpu_optional$'
-ctest --output-on-failure -j1 -R '^(nexus_hdl_cpu_slice|nexus_hdl_all)$'
-ctest --output-on-failure -j1
-./parallel-bench --gpu --build-dir ./build --repo-root .
-ctest --output-on-failure -j1
+cd build && ctest --output-on-failure -j8
 ```
 
-## Focused Slice Results
+65 tests: 64 passed, 1 skipped (`nexus_toolchain_compare`, `clang` not in PATH). The OpenMP and MPI
+benchmark tests are not registered on this host because no OpenMP-capable compiler and no `mpicxx`
+were found; `nexus_gpu_optional` passes through its CUDA-disabled path.
 
-| Slice | Classification | Validation evidence | Result |
+## Cross-Checks Against Independent References
+
+| check | reference | scale | result |
 | --- | --- | --- | --- |
-| FPU-lite | experimentally implemented | `nexus_fpu_lite_test` | 1/1 passed |
-| L1+L2 hierarchy | experimentally implemented | `nexus_memory_cache_test`, `nexus_pipeline_memory_system_test`, `nexus_phase10_cli` | 3/3 passed |
-| Flex/Bison LR parser path | experimentally implemented | `nexus_experimental_parse_test`, `nexus_phase10_cli` cross-coverage | passed |
-| scoreboard scheduler | experimentally implemented | `nexus_advanced_model_test`, `nexus_phase10_cli` cross-coverage | passed |
-| affine/locality compiler slice | experimentally implemented | `nexus_affine_analysis_test`, `nexus_unroll_pass_test`, `nexus_phase10_cli` cross-coverage | 2/2 focused tests passed |
-| stronger GPU demo | experimentally implemented | `nexus_gpu_optional`, direct `parallel-bench --gpu` wrapper check | passed with clean CUDA-disabled skip |
-| HDL CPU slice | experimentally implemented | `nexus_hdl_cpu_slice`, `nexus_hdl_all` | 2/2 passed |
+| every CPU model and both code generators | functional interpreter | 12 programs x 2 allocators x 12 models (288 runs) | all equal |
+| Verilog pipelined core | functional simulator (exit code and retired instructions) | 16 runs | all equal |
+| ISA styles | each other and MIPS | 8 programs x 5 machines | all equal |
+| soft float add/sub/mul/div | host FPU | 2,000,000 random pairs + 324 special pairs | bit-exact |
+| Booth, non-restoring division, CLA | native arithmetic | 20,000 random cases | equal |
+| regex NFA/DFA/minimal DFA | `std::regex` | 8 patterns x 400 strings | equal |
+| LR/LL parsers with attributes | hand-computed values | 4 grammars | equal |
+| Earley tree counts | Catalan numbers | up to 6 operands | equal |
+| polyhedral transformations | execution of the original nest | 600 random cases + 4 examples | every legal case identical |
+| Fourier-Motzkin dependence tests | enumeration of the concrete domain | 120 random nests | no missed dependence |
+| SIMT kernels | closed form and warp size 1 | 64-96 threads | equal |
+| SPMD reduction | closed form | 1-64 cores x 5 networks | equal |
 
-## Current Topic Classification
+## Defects Found In The 0.11 Code
 
-| Topic family | Classification | Notes |
-| --- | --- | --- |
-| handwritten frontend, semantics, IR, MIPS backend, functional/single/multi/pipeline execution, CLI flows | fully implemented | buildable and covered throughout the 56-test suite |
-| FPU-lite, L1+L2 memory hierarchy, Flex/Bison LR path, scoreboard scheduler, affine/locality slice, stronger GPU demo, HDL CPU slice, parallel/coherence/consistency-lite | experimentally implemented | real code paths with focused tests and bounded interfaces |
-| Tomasulo/reservation stations, generalized ambiguity-supporting parsing, deeper polyhedral theory, ISA-comparison material, literature synthesis | documented with worked examples | repository documentation remains explicit where theory exceeds executable scope |
-| full synthesizable HDL CPU, mandatory device-backed GPU success, reorder-buffer out-of-order core, industrial SSA/register allocation, large manycore research platform | still outside bounded scope | final repository states these limits directly |
+1. Pipeline with caches returned wrong results for programs with calls: an instruction held in ID/EX
+   during a memory freeze kept stale operands, and the load-use stall path could drop a frozen memory
+   access. Fixed and covered by the differential test.
+2. Passing a row of a two-dimensional array used the wrong address in the MIPS back end. Fixed and
+   covered by `tests/programs/array_rows.nx`.
 
-## GPU Validation Reality
-
-The current CPU-only build does not contain `build/bin/gpu-bench`. The optional wrapper still
-validated correctly and produced:
-
-```text
-suite=gpu kernel=vector-add status=skipped reason=cuda-disabled
-```
-
-That is a passing result for the bounded final audit because CUDA is explicitly optional.
-
-## Command Surface Spot-Checks
-
-The final polish pass also spot-checked the main documented entry points from the repository root:
-
-```bash
-./build/bin/nexusc --help
-./build/bin/mips-sim --help
-./build/bin/nexusc compile examples/source_lang/factorial.nx -S -o /tmp/nexus_factorial.s
-./build/bin/mips-sim run /tmp/nexus_factorial.s --mode functional --stats
-./build/bin/mips-sim fp-demo 1.5 0.25
-./parallel-bench --all --build-dir ./build --repo-root .
-./hdl-test all
-```
-
-Each completed successfully in the validated CPU-only environment.
-
-## Full-Suite Summary
-
-- total tests: 56
-- passed: 56
-- failed: 0
-- total real time in the final serial rerun: 3.19 sec
-
-## Known Limits After Audit
-
-- the repository fully covers the course material only in bounded educational/research-grade form, not as an industrial product
-- the stronger GPU path is optional and was validated in clean-skip mode rather than on a CUDA device in this audit
-- HDL coverage now includes a CPU slice, but not a full synthesizable processor
-- advanced scheduling now includes a bounded scoreboard experiment, but not Tomasulo or reorder-buffer execution
+The 0.11 test suite did not run any compiled program through the cached pipeline or pass array rows,
+which is why neither defect was visible before.

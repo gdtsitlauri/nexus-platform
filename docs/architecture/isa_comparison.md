@@ -131,5 +131,6 @@ done:
 
 - implemented: general-purpose-register MIPS subset with backend emission plus functional,
   single-cycle, and multi-cycle execution
-- documented with worked examples: accumulator, stack, IA-32 concept sketches, Java bytecode concept sketches
-- pending: later comparative measurements of code size and performance across richer backends
+- implemented (1.0.0): accumulator, stack (JVM-like bytecode) and register-memory (IA-32-like) back ends
+  with their own interpreters; `nexusc isa <file>` measures code size, instruction counts and memory
+  traffic for all of them next to MIPS. See `docs/architecture/isa_styles.md`.

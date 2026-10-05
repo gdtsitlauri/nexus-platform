@@ -54,6 +54,7 @@ void print_usage(std::ostream& stream) {
          << "  nexusc ast <file>\n"
          << "  nexusc check <file>\n"
          << "  nexusc ir <file>\n"
+         << "  nexusc quads <file>\n"
          << "  nexusc cfg <file>\n"
          << "  nexusc dom <file>\n"
          << "  nexusc analysis liveness <file>\n"
@@ -1032,6 +1033,18 @@ int main(int argc, char** argv) {
   }
   if (command == "ir") {
     return run_ir(loaded_source);
+  }
+  if (command == "quads") {
+    const auto checked_program = parse_and_check(loaded_source);
+    if (!checked_program.has_value()) {
+      return 1;
+    }
+    const auto module = lower_checked_program(loaded_source, *checked_program->program);
+    if (!module.has_value()) {
+      return 1;
+    }
+    std::cout << nexus::compiler::ir::print_quadruples(*module);
+    return 0;
   }
   if (command == "cfg") {
     return run_cfg(loaded_source);

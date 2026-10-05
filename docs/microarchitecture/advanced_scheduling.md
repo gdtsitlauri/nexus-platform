@@ -75,18 +75,9 @@ commit. Instead, it:
 That makes speculation visible in the metrics without introducing a much larger architectural
 framework.
 
-## What Is Documented With Worked Examples
+## Out-of-Order Execution (1.0.0)
 
-- Tomasulo / reservation-station concepts
-- rename-like indirection
-- wakeup/select behavior in a larger out-of-order machine
-
-These remain documentation-backed rather than executable code paths.
-
-## What Is Still Outside Bounded Scope
-
-- Tomasulo-lite or reservation stations as code
-- register renaming
-- reorder-buffer-style recovery
-- superscalar issue beyond width 2
-- industrial out-of-order wakeup/select logic
+Tomasulo scheduling with reservation stations, register renaming, a common data bus, a reorder
+buffer with in-order commit, store-to-load forwarding, a return-address stack, speculation with a
+redirect penalty, issue widths 1-4 and 2-way SMT are implemented as `--scheduler tomasulo`. See
+`docs/microarchitecture/tomasulo_rob_smt.md`.

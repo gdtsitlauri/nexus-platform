@@ -91,6 +91,6 @@ required baseline.
 
 ## Current Boundaries
 
-- Tomasulo-style reservation stations and reorder-buffer execution are still outside bounded scope
-- no large manycore or full-coherence research framework is attempted
+- Tomasulo-style reservation stations and reorder-buffer execution are implemented in the advanced
+  model (1.0.0); manycore runs go up to 64 cores on mesh and ring networks
 - no OS or privilege-architecture deep dive is attempted

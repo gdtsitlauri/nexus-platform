@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.0.0] - 2026-10-05
+
+Complete coverage of the six course outlines; every topic now has code and an automated test.
+
+- Compiler: linear-scan register allocation (`--regalloc linear-scan`, `analysis regalloc`), quadruple
+  printing (`nexusc quads`), SSA construction and SCCP (`analysis ssa|sccp`)
+- Formal languages: regex to NFA to DFA to minimal DFA, FIRST/FOLLOW, LL(1), LR(0)/SLR(1)/LR(1)/LALR(1),
+  Earley with parse-tree counting, left-recursion elimination and left factoring, S-attributed
+  evaluation (`nexusc regex`, `nexusc grammar`)
+- Type systems: Hindley-Milner inference (`nexusc infer`)
+- Polyhedral framework: Fourier-Motzkin dependence analysis, direction/distance vectors, unimodular
+  interchange/reversal/skewing with legality checks, FM loop-bound generation, execution-based
+  verification (`nexusc poly`)
+- ISA styles: stack (JVM-like), accumulator and register-memory (IA-32-like) back ends with
+  interpreters and a comparison against MIPS (`nexusc isa`)
+- Advanced core: Tomasulo scheduler with reorder buffer, register renaming, CDB, store-to-load
+  forwarding, return-address stack, issue width 1-4, `--pipeline-depth`, 2-way SMT (`--smt`)
+- Arithmetic: bit-exact IEEE-754 binary32 soft float, integer encodings, Booth and non-restoring
+  algorithms, carry-lookahead adder, strict UTF-8 (`mips-sim arith`)
+- HDL: synthesisable 5-stage pipelined MIPS core with forwarding and hazard handling, MIPS32 encoder
+  (`mips-sim encode`), RTL/simulator co-simulation and Yosys synthesis check
+- Parallel: SIMT GPU model (`--mode simt`), mesh and ring interconnects, SPMD `worker` entry for any core
+  count, asymmetric cores (`--core-cpi`)
+- Fixed: pipeline + cache returned wrong results (stale operands of an instruction held during a memory
+  freeze; load-use stall could drop a frozen memory access)
+- Fixed: passing a row of a multi-dimensional array used the wrong stride in the MIPS back end
+- Full 32-register MIPS name table; portable Python HDL runner; OpenMP/MPI optional at configure time
+- Repository reorganised: README in the common project skeleton, Greek README, CITATION.cff, course
+  outlines under `docs/course_outlines/`, phase history under `docs/history/`; the long system paper
+  was removed
+
 ## [0.11.0-phase11] - 2026-04-22
 
 - Added real Verilog HDL modules for the ALU, adder, iterative multiplier, iterative divider, register file, control unit, and pipeline register

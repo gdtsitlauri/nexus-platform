@@ -65,18 +65,12 @@ framework, but it does make locality-oriented reasoning executable:
 - memory-local arrays are summarized
 - strip-mining exposes a concrete locality-related transformation
 
-## What Is Documented With Worked Examples
+## Polyhedral Loop Transformations (1.0.0)
 
-- loop interchange intuition
-- tiling motivation
-- broader polyhedral scheduling theory
-
-## What Is Still Outside Bounded Scope
-
-- loop-invariant code motion
-- strength reduction
-- general tiling/interchange passes
-- a full polyhedral scheduler
+Loop interchange, reversal and skewing with dependence-based legality checks, Fourier-Motzkin
+loop-bound generation and execution-based verification are implemented in `src/compiler/polyhedral/`
+(`nexusc poly`). See `docs/compiler/polyhedral.md`. Loop-invariant code motion and strength
+reduction are not separate passes; SCCP (`nexusc analysis sccp`) covers constant propagation.
 
 ## Evidence
 

@@ -151,4 +151,118 @@ std::string print_module(const Module& module) {
   return output.str();
 }
 
+namespace {
+
+struct Quad {
+  std::string op;
+  std::string arg1;
+  std::string arg2;
+  std::string result;
+};
+
+std::string block_ref(const Function& function, BlockId id) {
+  for (const auto& block : function.blocks) {
+    if (block.id == id) {
+      return "bb" + std::to_string(id) + (block.label.empty() ? "" : "." + block.label);
+    }
+  }
+  return "bb" + std::to_string(id);
+}
+
+std::string element_ref(const Function& function, LocalId local, const std::vector<ValueId>& indices) {
+  std::string text = function.locals[local].name;
+  for (const ValueId index : indices) {
+    text += "[" + value_name(index) + "]";
+  }
+  return text;
+}
+
+}  // namespace
+
+std::string print_quadruples(const Module& module) {
+  std::ostringstream output;
+  for (const auto& function : module.functions) {
+    output << "func " << function.name << " quadruples:\n";
+    output << "  #    op          arg1          arg2          result\n";
+    std::size_t counter = 0;
+    auto emit = [&](const Quad& quad) {
+      std::string line = "  " + std::to_string(counter++);
+      line.resize(7, ' ');
+      line += quad.op;
+      line.resize(19, ' ');
+      line += quad.arg1;
+      line.resize(33, ' ');
+      line += quad.arg2;
+      line.resize(47, ' ');
+      line += quad.result;
+      while (!line.empty() && line.back() == ' ') {
+        line.pop_back();
+      }
+      output << line << '\n';
+    };
+    for (const auto& block : function.blocks) {
+      output << "  " << block_ref(function, block.id) << ":\n";
+      for (const auto& instruction : block.instructions) {
+        const std::string result = instruction.result.has_value() ? value_name(*instruction.result) : "";
+        switch (instruction.kind) {
+          case InstructionKind::ConstInt:
+            emit({"=", std::to_string(instruction.int_immediate), "", result});
+            break;
+          case InstructionKind::ConstBool:
+            emit({"=", instruction.bool_immediate ? "true" : "false", "", result});
+            break;
+          case InstructionKind::LoadLocal:
+            emit({"=", function.locals[instruction.local].name, "", result});
+            break;
+          case InstructionKind::StoreLocal:
+            emit({"=", value_name(instruction.operands.front()), "", function.locals[instruction.local].name});
+            break;
+          case InstructionKind::LoadElement:
+            emit({"=[]", element_ref(function, instruction.local, instruction.operands), "", result});
+            break;
+          case InstructionKind::StoreElement: {
+            std::vector<ValueId> indices(instruction.operands.begin(), instruction.operands.end() - 1);
+            emit({"[]=", value_name(instruction.operands.back()), "", element_ref(function, instruction.local, indices)});
+            break;
+          }
+          case InstructionKind::Unary:
+            emit({std::string(unary_op_name(instruction.unary_op)), value_name(instruction.operands.front()), "", result});
+            break;
+          case InstructionKind::Binary:
+            emit({std::string(binary_op_name(instruction.binary_op)), value_name(instruction.operands[0]),
+                  value_name(instruction.operands[1]), result});
+            break;
+          case InstructionKind::Call:
+            for (const auto& argument : instruction.call_arguments) {
+              emit({"param",
+                    argument.kind == CallArgumentKind::Value ? value_name(argument.value)
+                                                             : "&" + element_ref(function, argument.local, argument.indices),
+                    "", ""});
+            }
+            emit({"call", instruction.callee, std::to_string(instruction.call_arguments.size()), result});
+            break;
+        }
+      }
+      if (!block.terminator.has_value()) {
+        continue;
+      }
+      const auto& terminator = *block.terminator;
+      switch (terminator.kind) {
+        case TerminatorKind::Jump:
+          emit({"goto", "", "", block_ref(function, terminator.true_target)});
+          break;
+        case TerminatorKind::Branch:
+          emit({"if", value_name(*terminator.condition), "", block_ref(function, terminator.true_target)});
+          emit({"goto", "", "", block_ref(function, terminator.false_target)});
+          break;
+        case TerminatorKind::Return:
+          emit({"return", terminator.return_value.has_value() ? value_name(*terminator.return_value) : "", "", ""});
+          break;
+      }
+    }
+    output << '\n';
+  }
+  return output.str();
+}
+
 }  // namespace nexus::compiler::ir
