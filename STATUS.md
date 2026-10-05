@@ -10,7 +10,8 @@
 - Tests: 65 CTest tests, 64 passed and 1 skipped (`nexus_toolchain_compare` needs `clang` in PATH);
   the OpenMP and MPI benchmark tests are not registered when those toolchains are absent
 - Colab (Tesla T4, CUDA 13.0, GCC 13.3, OpenMPI, Yosys): 68 CTest tests including OpenMP, MPI, the
-  bench wrapper and the CUDA demo; all passed after the type-printing fix below (`results/colab/`)
+  bench wrapper and the CUDA demo; 66 passed, 1 skipped (clang), 1 failed (type printing, fixed below and
+  re-verified with Clang; not yet re-run on Colab) (`results/colab/`)
 - HDL: Icarus Verilog for the 9 testbench suites and the RTL co-simulation, Yosys for synthesis
 
 ## What 1.0.0 Added Over 0.11
