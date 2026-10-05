@@ -4,7 +4,8 @@ add_library(
     src/build_info.cpp
     src/banner.cpp
     src/arithmetic.cpp
-    src/fpu_lite.cpp)
+    src/fpu_lite.cpp
+    src/number_systems.cpp)
 
 add_library(Nexus::common ALIAS nexus_common)
 

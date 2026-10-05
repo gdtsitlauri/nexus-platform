@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <optional>
@@ -8,6 +9,7 @@
 
 #include "nexus/common/banner.hpp"
 #include "nexus/common/fpu_lite.hpp"
+#include "nexus/common/number_systems.hpp"
 #include "nexus/mips/loader/encoder.hpp"
 #include "nexus/mips/loader/parser.hpp"
 #include "nexus/sim/advanced/model.hpp"
@@ -27,6 +29,12 @@ void print_usage(std::ostream& stream) {
          << "  mips-sim --help\n"
          << "  mips-sim fp-demo <lhs> <rhs>\n"
          << "  mips-sim encode <file> [-o image.hex]\n"
+         << "  mips-sim arith float <a> add|sub|mul|div <b>\n"
+         << "  mips-sim arith repr <integer> [bits]\n"
+         << "  mips-sim arith booth <a> <b> [bits]\n"
+         << "  mips-sim arith divide <dividend> <divisor> [bits]\n"
+         << "  mips-sim arith cla <a> <b>\n"
+         << "  mips-sim arith utf8 <text>\n"
          << "  mips-sim run <file> --mode functional [--trace] [--stats]\n"
          << "  mips-sim run <file> --mode single-cycle [--trace] [--stats]\n"
          << "  mips-sim run <file> --mode multi-cycle [--control hardwired|microcode] [--trace] [--stats]\n"
@@ -51,6 +59,129 @@ int print_loader_diagnostics(const std::vector<std::string>& diagnostics) {
     std::cerr << "error: " << diagnostic << '\n';
   }
   return diagnostics.empty() ? 0 : 1;
+}
+
+int run_arith(int argc, char** argv) {
+  namespace common = nexus::common;
+  if (argc < 4) {
+    print_usage(std::cerr);
+    return 1;
+  }
+  const std::string what = argv[2];
+  auto integer = [&](int index, long long fallback) -> long long {
+    if (index >= argc) {
+      return fallback;
+    }
+    try {
+      return std::stoll(argv[index], nullptr, 0);
+    } catch (...) {
+      return fallback;
+    }
+  };
+  if (what == "float" && argc == 6) {
+    const float lhs = std::stof(argv[3]);
+    const float rhs = std::stof(argv[5]);
+    std::uint32_t a = 0;
+    std::uint32_t b = 0;
+    std::memcpy(&a, &lhs, sizeof(a));
+    std::memcpy(&b, &rhs, sizeof(b));
+    const std::string op = argv[4];
+    std::uint32_t soft = 0;
+    float hardware = 0.0F;
+    if (op == "add") {
+      soft = common::soft_add(a, b);
+      hardware = lhs + rhs;
+    } else if (op == "sub") {
+      soft = common::soft_sub(a, b);
+      hardware = lhs - rhs;
+    } else if (op == "mul") {
+      soft = common::soft_mul(a, b);
+      hardware = lhs * rhs;
+    } else if (op == "div") {
+      soft = common::soft_div(a, b);
+      hardware = lhs / rhs;
+    } else {
+      std::cerr << "error: unknown float operation '" << op << "'\n";
+      return 1;
+    }
+    std::uint32_t hard = 0;
+    std::memcpy(&hard, &hardware, sizeof(hard));
+    std::cout << "a        = " << common::describe_float_bits(a) << '\n'
+              << "b        = " << common::describe_float_bits(b) << '\n'
+              << "software = " << common::describe_float_bits(soft) << '\n'
+              << "hardware = " << common::describe_float_bits(hard) << '\n'
+              << ((soft == hard || (common::is_nan_bits(soft) && common::is_nan_bits(hard))) ? "bit-exact match\n"
+                                                                                           : "MISMATCH\n");
+    return 0;
+  }
+  if (what == "repr") {
+    const long long value = integer(3, 0);
+    const auto bits = static_cast<unsigned>(integer(4, 8));
+    if (bits < 2 || bits > 32) {
+      std::cerr << "error: bits must be between 2 and 32\n";
+      return 1;
+    }
+    const auto encodings = common::encode_integer(value, bits);
+    auto show = [](const std::optional<std::string>& text) { return text.value_or("(not representable)"); };
+    std::cout << value << " in " << bits << " bits:\n"
+              << "  sign-magnitude   " << show(encodings.sign_magnitude) << '\n'
+              << "  one's complement " << show(encodings.ones_complement) << '\n'
+              << "  two's complement " << show(encodings.twos_complement) << '\n'
+              << "  excess-" << ((1LL << (bits - 1)) - 1) << "        " << show(encodings.excess) << '\n'
+              << "  packed BCD       " << show(encodings.bcd) << '\n';
+    return 0;
+  }
+  if (what == "booth" && argc >= 5) {
+    const auto bits = static_cast<unsigned>(integer(5, 8));
+    const auto trace = common::booth_multiply(integer(3, 0), integer(4, 0), bits);
+    for (const auto& step : trace.steps) {
+      std::cout << "  " << step << '\n';
+    }
+    std::cout << "product = " << trace.result << '\n';
+    return 0;
+  }
+  if (what == "divide" && argc >= 5) {
+    const auto bits = static_cast<unsigned>(integer(5, 8));
+    const auto trace = common::nonrestoring_divide(static_cast<std::uint64_t>(integer(3, 0)),
+                                                   static_cast<std::uint64_t>(integer(4, 0)), bits);
+    if (!trace.has_value()) {
+      std::cerr << "error: division by zero\n";
+      return 1;
+    }
+    for (const auto& step : trace->steps) {
+      std::cout << "  " << step << '\n';
+    }
+    std::cout << "quotient = " << trace->result << ", remainder = " << trace->remainder << '\n';
+    return 0;
+  }
+  if (what == "cla" && argc >= 5) {
+    const auto result = common::carry_lookahead_add(static_cast<std::uint32_t>(integer(3, 0)),
+                                                    static_cast<std::uint32_t>(integer(4, 0)));
+    std::cout << "sum = " << result.sum << " (carry out " << result.carry_out << ")\n"
+              << "carries  " << common::to_binary(result.carries, 32) << '\n'
+              << "gate depth: carry-lookahead " << result.lookahead_delay << " vs ripple-carry " << result.ripple_delay
+              << '\n';
+    return 0;
+  }
+  if (what == "utf8") {
+    std::string error;
+    const auto decoded = common::utf8_decode(argv[3], error);
+    if (!decoded.has_value()) {
+      std::cerr << "error: " << error << '\n';
+      return 1;
+    }
+    for (const auto code_point : *decoded) {
+      const auto bytes = common::utf8_encode(code_point);
+      std::cout << "U+" << std::hex << std::uppercase << code_point << std::dec << "  ->";
+      for (const auto byte : *bytes) {
+        std::cout << ' ' << common::to_binary(byte, 8);
+      }
+      std::cout << '\n';
+    }
+    return 0;
+  }
+  print_usage(std::cerr);
+  return 1;
 }
 
 int print_summary(const nexus::sim::metrics::ExecutionSummary& summary) {
@@ -225,6 +356,10 @@ int main(int argc, char** argv) {
   if (command == "--help" || command == "help") {
     print_usage(std::cout);
     return 0;
+  }
+
+  if (command == "arith") {
+    return run_arith(argc, argv);
   }
 
   if (command == "encode") {
