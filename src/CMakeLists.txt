@@ -41,6 +41,7 @@ target_link_libraries(
     nexus_sim_pipeline
     nexus_sim_advanced
     nexus_sim_parallel
+    nexus_sim_simt
     nexus_sim_metrics)
 nexus_apply_project_options(mips_sim)
 nexus_set_warnings(mips_sim)

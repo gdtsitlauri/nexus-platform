@@ -1,0 +1,15 @@
+// Uniform SIMT kernel: every thread runs the same instruction stream (100% SIMD efficiency);
+// its locals live in interleaved local memory, so stack traffic coalesces perfectly.
+fn kernel(tid: int, threads: int) -> int {
+  var sum: int = 0;
+  var i: int = 0;
+  while (i < 8) {
+    sum = sum + tid * i;
+    i = i + 1;
+  }
+  return sum + threads;
+}
+
+fn main() -> int {
+  return kernel(0, 1);
+}

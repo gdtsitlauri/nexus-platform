@@ -24,6 +24,8 @@ enum class InterconnectKind {
   Bus,
   Switch,
   NoCLite,
+  Mesh,  // 2-D mesh sized ceil(sqrt(cores)) wide, dimension-ordered (XY) routing
+  Ring,  // bidirectional ring, shortest direction
 };
 
 std::string_view coherence_name(CoherenceKind kind);
@@ -39,6 +41,9 @@ struct RunOptions {
   CoherenceKind coherence = CoherenceKind::SnoopingLite;
   ConsistencyKind consistency = ConsistencyKind::Sequential;
   InterconnectKind interconnect = InterconnectKind::Bus;
+  // Asymmetric multiprocessing: cycles per instruction for each core (empty = 1 everywhere),
+  // e.g. {1, 1, 3, 3} models two "big" and two "little" cores.
+  std::vector<std::size_t> core_cpi;
 };
 
 struct RunResult {

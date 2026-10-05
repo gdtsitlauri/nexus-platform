@@ -123,8 +123,24 @@ std::optional<std::size_t> word_index(std::int32_t address, const SharedState& s
   return index;
 }
 
-std::size_t hop_cost(InterconnectKind kind, std::size_t source, std::size_t target) {
+std::size_t hop_cost(InterconnectKind kind, std::size_t cores, std::size_t source, std::size_t target) {
   switch (kind) {
+    case InterconnectKind::Mesh: {
+      std::size_t width = 1;
+      while (width * width < cores) {
+        ++width;
+      }
+      const std::size_t sx = source % width;
+      const std::size_t sy = source / width;
+      const std::size_t tx = target % width;
+      const std::size_t ty = target / width;
+      // one router traversal per hop plus injection
+      return 1 + (sx > tx ? sx - tx : tx - sx) + (sy > ty ? sy - ty : ty - sy);
+    }
+    case InterconnectKind::Ring: {
+      const std::size_t forward = source > target ? source - target : target - source;
+      return 1 + std::min(forward, cores - forward);
+    }
     case InterconnectKind::Bus:
       return 3;
     case InterconnectKind::Switch:
@@ -153,7 +169,7 @@ std::size_t coherence_penalty(
 
   std::size_t penalty = 0;
   for (const std::size_t target : targets) {
-    penalty += hop_cost(options.interconnect, source_core, target);
+    penalty += hop_cost(options.interconnect, options.cores, source_core, target);
     result.interconnect_messages += 1;
   }
   result.interconnect_cycles += penalty;
@@ -649,6 +665,10 @@ std::string_view interconnect_name(InterconnectKind kind) {
       return "switch";
     case InterconnectKind::NoCLite:
       return "noc-lite";
+    case InterconnectKind::Mesh:
+      return "mesh";
+    case InterconnectKind::Ring:
+      return "ring";
   }
   return "unknown";
 }
@@ -665,6 +685,16 @@ RunResult run_program(const LoadedProgram& program, const RunOptions& options) {
   const std::size_t stack_span = options.cores == 0 ? options.memory_words : options.memory_words / (options.cores + 1);
   for (std::size_t core_id = 0; core_id < options.cores; ++core_id) {
     auto start_pc = started_label_pc(program, core_id);
+    bool spmd = false;
+    if (!start_pc.has_value()) {
+      // SPMD entry: every core without its own coreN label runs `worker` with $a0 = core id
+      // and $a1 = number of cores.
+      const auto worker = program.labels.find("worker");
+      if (worker != program.labels.end()) {
+        start_pc = worker->second;
+        spmd = true;
+      }
+    }
     if (!start_pc.has_value()) {
       if (core_id == 0) {
         start_pc = program.entry_point;
@@ -681,6 +711,10 @@ RunResult run_program(const LoadedProgram& program, const RunOptions& options) {
         : options.memory_words;
     reg(cores[core_id], Register::SP) = static_cast<std::int32_t>(stack_top_words * sizeof(std::int32_t));
     reg(cores[core_id], Register::RA) = kHaltReturnAddress;
+    if (spmd) {
+      reg(cores[core_id], Register::A0) = static_cast<std::int32_t>(core_id);
+      reg(cores[core_id], Register::A1) = static_cast<std::int32_t>(options.cores);
+    }
     started_cores += 1;
   }
 
@@ -744,6 +778,8 @@ RunResult run_program(const LoadedProgram& program, const RunOptions& options) {
 
       if (core.halted) {
         result.core_exit_codes[core_id] = core.exit_code;
+      } else if (core_id < options.core_cpi.size() && options.core_cpi[core_id] > 1) {
+        core.stall_cycles += options.core_cpi[core_id] - 1;  // slower ("little") core
       }
     }
 

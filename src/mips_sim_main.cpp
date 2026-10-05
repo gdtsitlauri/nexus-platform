@@ -20,6 +20,7 @@
 #include "nexus/sim/multi_cycle/model.hpp"
 #include "nexus/sim/parallel/model.hpp"
 #include "nexus/sim/pipeline/model.hpp"
+#include "nexus/sim/simt/model.hpp"
 #include "nexus/sim/single_cycle/model.hpp"
 
 namespace {
@@ -50,7 +51,9 @@ void print_usage(std::ostream& stream) {
          << "  mips-sim run <file> --mode advanced --scheduler tomasulo [--issue-width 1-4] [--rob N]\n"
          << "               [--rs N] [--cdb N] [--pipeline-depth N] [--smt <thread1.s>] [--trace] [--stats]\n"
          << "  mips-sim run <file> --mode parallel [--cores N] [--coherence snoop|directory-lite]\n"
-         << "               [--consistency sc|weak-lite] [--interconnect bus|switch|noc-lite]\n"
+         << "               [--consistency sc|weak-lite] [--interconnect bus|switch|noc-lite|mesh|ring]\n"
+         << "               [--core-cpi c0,c1,...]\n"
+         << "  mips-sim run <file> --mode simt [--threads N] [--warp-size N] [--trace] [--stats]\n"
          << "               [--trace] [--stats]\n";
 }
 
@@ -289,6 +292,12 @@ std::optional<nexus::sim::parallel::InterconnectKind> parse_parallel_interconnec
   if (text == "noc-lite") {
     return InterconnectKind::NoCLite;
   }
+  if (text == "mesh") {
+    return InterconnectKind::Mesh;
+  }
+  if (text == "ring") {
+    return InterconnectKind::Ring;
+  }
   return std::nullopt;
 }
 
@@ -444,6 +453,9 @@ int main(int argc, char** argv) {
   std::optional<std::size_t> cdb_width;
   std::optional<std::size_t> pipeline_depth;
   std::optional<std::string> smt_file;
+  std::vector<std::size_t> core_cpi;
+  std::size_t simt_threads = 64;
+  std::size_t simt_warp_size = 32;
 
   for (int index = 3; index < argc; ++index) {
     const std::string option = argv[index];
@@ -547,12 +559,47 @@ int main(int argc, char** argv) {
       vliw = true;
       continue;
     }
+    if (option == "--core-cpi") {
+      if (index + 1 >= argc) {
+        std::cerr << "error: missing list after --core-cpi\n";
+        return 1;
+      }
+      std::string list = argv[++index];
+      std::size_t start = 0;
+      while (start <= list.size()) {
+        const std::size_t comma = list.find(',', start);
+        const auto value = parse_size_value(list.substr(start, comma == std::string::npos ? std::string::npos : comma - start));
+        if (!value.has_value() || *value == 0) {
+          std::cerr << "error: --core-cpi expects positive integers like 1,1,3,3\n";
+          return 1;
+        }
+        core_cpi.push_back(*value);
+        if (comma == std::string::npos) {
+          break;
+        }
+        start = comma + 1;
+      }
+      continue;
+    }
     if (option == "--smt") {
       if (index + 1 >= argc) {
         std::cerr << "error: missing program for hardware thread 1 after --smt\n";
         return 1;
       }
       smt_file = argv[++index];
+      continue;
+    }
+    if (option == "--threads" || option == "--warp-size") {
+      if (index + 1 >= argc) {
+        std::cerr << "error: missing numeric value after '" << option << "'\n";
+        return 1;
+      }
+      const auto parsed_value = parse_size_value(argv[++index]);
+      if (!parsed_value.has_value() || *parsed_value == 0) {
+        std::cerr << "error: expected a positive integer after '" << option << "'\n";
+        return 1;
+      }
+      (option == "--threads" ? simt_threads : simt_warp_size) = *parsed_value;
       continue;
     }
     if (option == "--rob" || option == "--rs" || option == "--cdb" || option == "--pipeline-depth") {
@@ -629,7 +676,7 @@ int main(int argc, char** argv) {
   }
 
   if (mode != "functional" && mode != "single-cycle" && mode != "multi-cycle" &&
-      mode != "pipeline" && mode != "advanced" && mode != "parallel") {
+      mode != "pipeline" && mode != "advanced" && mode != "parallel" && mode != "simt") {
     std::cerr << "error: unsupported mode '" << mode << "'\n";
     return 1;
   }
@@ -695,6 +742,41 @@ int main(int argc, char** argv) {
   const auto parsed = nexus::mips::loader::load_program_from_file(argv[2]);
   if (!parsed.diagnostics.empty()) {
     return print_loader_diagnostics(parsed.diagnostics);
+  }
+
+  if (mode == "simt") {
+    const auto result = nexus::sim::simt::run_kernel(
+        *parsed.program,
+        {.threads = simt_threads, .warp_size = simt_warp_size, .max_warp_instructions = 2'000'000, .trace = trace});
+    if (!result.success) {
+      std::cerr << "error: " << result.error << '\n';
+      return 1;
+    }
+    for (const auto& line : result.trace_lines) {
+      std::cout << line << '\n';
+    }
+    std::cout << "Mode: simt\nThreads: " << simt_threads << "\nWarp size: " << simt_warp_size << "\nWarps: " << result.warps
+              << "\nThread results:";
+    for (std::size_t thread = 0; thread < result.thread_results.size(); ++thread) {
+      if (thread == 32 && result.thread_results.size() > 40) {
+        std::cout << " ... (" << result.thread_results.size() - 32 << " more)";
+        break;
+      }
+      std::cout << ' ' << result.thread_results[thread];
+    }
+    std::cout << "\nCycles (warp issue slots): " << result.cycles << "\nWarp instructions: " << result.warp_instructions
+              << "\nThread instructions: " << result.thread_instructions
+              << "\nSIMD efficiency: " << 100.0 * result.simd_efficiency(simt_warp_size) << "%"
+              << "\nDivergent branches: " << result.divergent_branches << "\nUniform branches: " << result.uniform_branches
+              << "\nMax reconvergence-stack depth: " << result.max_stack_depth
+              << "\nMemory requests: " << result.memory_requests << " (global " << result.global_requests << ", local "
+              << result.local_requests << ")"
+              << "\nMemory transactions (128B): " << result.memory_transactions << '\n';
+    if (result.memory_requests > 0) {
+      std::cout << "Transactions per request: "
+                << static_cast<double>(result.memory_transactions) / static_cast<double>(result.memory_requests) << '\n';
+    }
+    return 0;
   }
 
   if (mode == "functional") {
@@ -1121,7 +1203,7 @@ int main(int argc, char** argv) {
     const auto interconnect = parse_parallel_interconnect(interconnect_name.value_or("bus"));
     if (!interconnect.has_value()) {
       std::cerr << "error: unsupported interconnect '" << interconnect_name.value_or("?")
-                << "', expected 'bus', 'switch', or 'noc-lite'\n";
+                << "', expected 'bus', 'switch', 'noc-lite', 'mesh' or 'ring'\n";
       return 1;
     }
 
@@ -1135,6 +1217,7 @@ int main(int argc, char** argv) {
             .coherence = *coherence,
             .consistency = *consistency,
             .interconnect = *interconnect,
+            .core_cpi = core_cpi,
         });
     if (!result.success) {
       std::cerr << "error: " << result.error << '\n';
@@ -1146,6 +1229,13 @@ int main(int argc, char** argv) {
     }
     for (const auto& line : result.system_lines) {
       std::cout << line << '\n';
+    }
+    if (parsed.program->labels.contains("worker") || !core_cpi.empty()) {
+      std::cout << "Core exit codes:";
+      for (const auto code : result.core_exit_codes) {
+        std::cout << ' ' << code;
+      }
+      std::cout << '\n';
     }
 
     const double cpi = result.retired_instructions == 0

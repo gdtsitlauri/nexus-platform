@@ -344,3 +344,12 @@ nexus_apply_project_options(nexus_number_systems_test)
 nexus_set_warnings(nexus_number_systems_test)
 nexus_enable_sanitizers(nexus_number_systems_test)
 add_test(NAME nexus_number_systems_test COMMAND $<TARGET_FILE:nexus_number_systems_test>)
+
+add_executable(nexus_simt_test simt_test.cpp)
+target_link_libraries(
+  nexus_simt_test
+  PRIVATE nexus_frontend nexus_semantics nexus_ir nexus_backend_mips nexus_mips_assembler nexus_mips_loader nexus_sim_simt)
+nexus_apply_project_options(nexus_simt_test)
+nexus_set_warnings(nexus_simt_test)
+nexus_enable_sanitizers(nexus_simt_test)
+add_test(NAME nexus_simt_test COMMAND $<TARGET_FILE:nexus_simt_test> "${PROJECT_SOURCE_DIR}")
