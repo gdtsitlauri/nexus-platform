@@ -89,6 +89,7 @@ nexus-platform/
   benchmarks/   OpenMP, MPI, SIMD, optional CUDA
   examples/     source_lang/ (NexusLang), grammars/, loops/, gpu/, parallel/, formal/
   tests/        unit/, integration/, golden/, programs/ (shared test programs)
+  notebooks/    Colab notebook for the OpenMP, MPI and CUDA runs
   docs/
     course_outlines/   the six course outlines (PDF)
     reports/           full_syllabus_checklist.md, course_mapping.md, validation_report.md, studies
@@ -129,7 +130,8 @@ A few entry points (more in each `docs/` note):
 Version 1.0.0 is complete for its purpose: the six course outlines are covered and tested. Possible
 extensions:
 - run the Verilog CPU on an FPGA board;
-- run the OpenMP, MPI and CUDA programs on a Linux machine with those toolchains;
+- run the OpenMP, MPI and CUDA programs: `notebooks/NEXUS_Colab_OpenMP_MPI_CUDA.ipynb` does it on a
+  free Colab T4 (Run all) and stores the output under `results/colab/`;
 - add thread blocks and shared memory to the SIMT model;
 - add tiled code generation to the polyhedral tool.
 
