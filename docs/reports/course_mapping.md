@@ -10,7 +10,7 @@ with code paths and test names is `docs/reports/full_syllabus_checklist.md`.
 | NEY613 Compilers | complete | `nexusc` end to end; `nexusc regex` and `nexusc grammar` (automata, LL(1), LR(0)/SLR/LR(1)/LALR, attributes); Flex/Bison path; `nexusc quads`; linear-scan register allocation |
 | NEY606 Computer Architecture | complete | Amdahl and benchmark scripts; superscalar, VLIW-lite, scoreboard and Tomasulo with ROB, speculation and RAS; `--pipeline-depth`; caches and peripherals; multiprocessor coherence and consistency |
 | NEY709 Advanced Compiler Topics | complete | Earley and parallel parsing; Hindley-Milner (`nexusc infer`); SSA and SCCP; data flow (iterative and region based); symbolic analysis; unrolling; polyhedral transformations (`nexusc poly`); alias and interprocedural analysis |
-| NEY704 Parallel Systems and Programming | complete (OpenMP, MPI and CUDA demos need their toolchains) | SMT on the Tomasulo core; multicore simulator with snooping/directory coherence, SC/weak consistency, locks, barriers, atomics; bus/switch/ring/mesh networks; 1-64 cores; asymmetric cores; SIMT GPU model; OpenMP, MPI, SIMD and CUDA programs |
+| NEY704 Parallel Systems and Programming | complete (OpenMP, MPI and CUDA demos run on Colab, `results/colab/`) | SMT on the Tomasulo core; multicore simulator with snooping/directory coherence, SC/weak consistency, locks, barriers, atomics; bus/switch/ring/mesh networks; 1-64 cores; asymmetric cores; SIMT GPU model; OpenMP, MPI, SIMD and CUDA programs |
 
 Theory-only parts of the outlines (history of computing, Flynn's taxonomy, reading lists) are covered
 in `docs/reports/history_of_computing_evolution.md`, `docs/parallel/overview.md` and `docs/literature/`.

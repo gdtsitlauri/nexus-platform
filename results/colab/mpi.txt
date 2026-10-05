@@ -1,0 +1,2 @@
+benchmark=mpi kernel=reduce ranks=2 size=1024 checksum=1574402 status=ok
+benchmark=mpi kernel=ring ranks=2 size=1024 checksum=2049 status=ok

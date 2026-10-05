@@ -1,0 +1,12 @@
+suite,case,kernel,status,reason,checksum,cpu_checksum,gpu_checksum,threads,ranks,size,program_exited_with_code,cycles,instructions,coherence,consistency,interconnect
+openmp,vector-add,vector-add,ok,,360,,,2,,16,,,,,,
+openmp,reduction,reduction,ok,,59,,,2,,16,,,,,,
+openmp,matmul,matmul,ok,,22464,,,2,,16,,,,,,
+openmp,branch-mix,branch-mix,ok,,0,,,2,,16,,,,,,
+mpi,reduce,reduce,ok,,110,,,,2,8,,,,,,
+mpi,ring,ring,ok,,17,,,,2,8,,,,,,
+simd,vector-add,vector-add,ok,,1488,,,,,32,,,,,,
+simd,dot,dot,ok,,439,,,,,32,,,,,,
+parallel,coherence-demo,,ok,,,,,,,,7,9,14,snoop,sc,bus
+gpu,vector-add,vector-add,ok,,4096,4096,4096,,,64,,,,,,
+gpu,reduction,reduction,ok,,253,253,253,,,64,,,,,,

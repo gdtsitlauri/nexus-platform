@@ -1,0 +1,4 @@
+benchmark=openmp kernel=vector-add threads=2 size=1024 checksum=1571328 status=ok
+benchmark=openmp kernel=reduction threads=2 size=1024 checksum=4091 status=ok
+benchmark=openmp kernel=matmul threads=2 size=1024 checksum=22464 status=ok
+benchmark=openmp kernel=branch-mix threads=2 size=1024 checksum=149 status=ok

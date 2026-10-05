@@ -53,7 +53,11 @@ All numbers come from `ctest` and the commands in `docs/`; the full record is `d
      MIPS.
    - Divergent GPU kernels drop to 14% SIMD efficiency; strided accesses need 32 memory transactions
      per warp request against 1.
-6. **Two defects in the earlier version were found and fixed** (`STATUS.md`):
+6. **OpenMP, MPI and CUDA run on real toolchains.** On Google Colab (Tesla T4) the complete suite
+   of 68 tests ran, including the OpenMP and MPI benchmarks and the CUDA demo, whose GPU checksums
+   match the CPU (`results/colab/`). The run also exposed one portability bug, now fixed: GCC named
+   type variables in a different order than Clang.
+7. **Two defects in the earlier version were found and fixed** (`STATUS.md`):
    - the cached pipeline returned wrong results for programs with calls;
    - passing a row of a 2-D array used the wrong address.
 
@@ -68,8 +72,9 @@ All numbers come from `ctest` and the commands in `docs/`; the full record is `d
   JVM back ends are faithful subsets, not complete instruction sets.
 - The polyhedral tool handles perfect loop nests with concrete parameter values and does not generate
   tiled code.
-- The OpenMP, MPI and CUDA programs need their toolchains. They were not run on the Windows host used
-  for the 1.0.0 validation, where those tests are skipped.
+- The OpenMP, MPI and CUDA programs need their toolchains. They were skipped on the Windows host and run
+  on Google Colab (Tesla T4, CUDA 13.0, GCC 13.3, OpenMPI) instead: all their tests passed there
+  (`results/colab/`). These are small correctness demos, not performance studies.
 
 ## Folder map
 
@@ -90,6 +95,7 @@ nexus-platform/
   examples/     source_lang/ (NexusLang), grammars/, loops/, gpu/, parallel/, formal/
   tests/        unit/, integration/, golden/, programs/ (shared test programs)
   notebooks/    Colab notebook for the OpenMP, MPI and CUDA runs
+  results/colab/  output of that notebook on a Tesla T4 (ctest log, benchmark outputs, environment)
   docs/
     course_outlines/   the six course outlines (PDF)
     reports/           full_syllabus_checklist.md, course_mapping.md, validation_report.md, studies
@@ -130,8 +136,6 @@ A few entry points (more in each `docs/` note):
 Version 1.0.0 is complete for its purpose: the six course outlines are covered and tested. Possible
 extensions:
 - run the Verilog CPU on an FPGA board;
-- run the OpenMP, MPI and CUDA programs: `notebooks/NEXUS_Colab_OpenMP_MPI_CUDA.ipynb` does it on a
-  free Colab T4 (Run all) and stores the output under `results/colab/`;
 - add thread blocks and shared memory to the SIMT model;
 - add tiled code generation to the polyhedral tool.
 

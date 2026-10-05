@@ -110,14 +110,14 @@ No topic of the six outlines is left outside the project.
 | taxonomy of parallel architectures (Flynn) | notes | `docs/parallel/overview.md` | `nexus_report_docs` |
 | multithreading, simultaneous multithreading | implemented and tested | 2-way SMT on the Tomasulo core (`--smt <thread1.s>`, ICOUNT fetch) | `nexus_tomasulo_test` |
 | shared-memory multiprocessors | implemented and tested | `--mode parallel`, SPMD `worker` entry for any core count | `nexus_parallel_model_test`, `nexus_manycore` |
-| distributed memory, message passing (MPI) | implemented, toolchain-dependent | `benchmarks/mpi/mpi_bench.cpp` | `nexus_mpi_benchmark` (needs `mpicxx`) |
+| distributed memory, message passing (MPI) | implemented, toolchain-dependent | `benchmarks/mpi/mpi_bench.cpp` | `nexus_mpi_benchmark` (needs `mpicxx`; passed on Colab, `results/colab/`) |
 | symmetric and asymmetric multiprocessors | implemented and tested | `--core-cpi 1,1,4,4` (big/little cores) | `nexus_manycore` |
 | snooping and directory coherence | implemented and tested | `--coherence snoop / directory-lite` | `nexus_coherence_test` |
 | memory consistency, synchronisation | implemented and tested | `--consistency sc / weak-lite`, locks, barriers, atomics | `nexus_consistency_test`, `nexus_phase10_golden` |
-| OpenMP | implemented, toolchain-dependent | `benchmarks/openmp/openmp_bench.cpp` | `nexus_openmp_benchmark` (needs an OpenMP compiler) |
+| OpenMP | implemented, toolchain-dependent | `benchmarks/openmp/openmp_bench.cpp` | `nexus_openmp_benchmark` (needs an OpenMP compiler; passed on Colab) |
 | vector and SIMD programming | implemented and tested | `benchmarks/simd/simd_bench.cpp` | `nexus_simd_benchmark` |
 | GPUs and SIMT execution | implemented and tested | `src/sim/simt/`: warps, reconvergence stack, SIMD efficiency, memory coalescing (`--mode simt`) | `nexus_simt_test` |
-| GPU programming on a device (CUDA) | implemented, toolchain-dependent | `benchmarks/gpu_optional/gpu_optional_bench.cu` | `nexus_gpu_optional` (needs `nvcc`) |
+| GPU programming on a device (CUDA) | implemented, toolchain-dependent | `benchmarks/gpu_optional/gpu_optional_bench.cu` | `nexus_gpu_optional` (needs `nvcc`; passed on a Colab Tesla T4, GPU checksums equal the CPU) |
 | interconnects: bus, switch, ring, 2-D mesh NoC | implemented and tested | `--interconnect bus / switch / ring / mesh / noc-lite` | `nexus_interconnect_test`, `nexus_manycore` |
 | manycore (up to 64 cores) | implemented and tested | SPMD reduction on 1-64 cores | `nexus_manycore` |
 | literature study | notes | `docs/literature/parallel_readings.md` | `nexus_literature_docs` |

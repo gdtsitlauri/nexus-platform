@@ -1,0 +1,5 @@
+Tesla T4, 580.82.07
+Build cuda_13.0.r13.0/compiler.36424714_0
+gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+cmake version 3.31.10

@@ -1,0 +1,1 @@
+benchmark=gpu kernel=vector-add size=64 checksum=4096 cpu_checksum=4096 gpu_checksum=4096 status=ok

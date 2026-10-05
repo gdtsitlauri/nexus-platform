@@ -45,3 +45,16 @@ were found; `nexus_gpu_optional` passes through its CUDA-disabled path.
 
 The 0.11 test suite did not run any compiled program through the cached pipeline or pass array rows,
 which is why neither defect was visible before.
+
+## Toolchain-Dependent Runs (Google Colab)
+
+`notebooks/NEXUS_Colab_OpenMP_MPI_CUDA.ipynb` on a Tesla T4 (CUDA 13.0, GCC 13.3, OpenMPI, CMake 3.31,
+Icarus Verilog, Yosys), output in `results/colab/`:
+
+- 68 CTest tests registered (OpenMP, MPI, bench wrapper and CUDA included); 66 passed, 1 skipped
+  (`clang`), 1 failed: `nexus_type_inference_test`. It failed because of a GCC/Clang difference in
+  evaluation order when naming type variables, which is now fixed (`STATUS.md`).
+- OpenMP (2 threads, n = 1024): vector-add, reduction, matmul and branch-mix all `status=ok`.
+- MPI (2 ranks, n = 1024): reduce and ring `status=ok`.
+- CUDA: vector-add and reduction with GPU checksum equal to the CPU checksum (4096 / 4096, 253 / 253).
+- Verilog co-simulation and Yosys synthesis also passed under Linux.

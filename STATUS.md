@@ -4,11 +4,13 @@
 
 - Version: 1.0.0 (2026-10-05)
 - Scope: every topic of the six course outlines in `docs/course_outlines/` is implemented as code
-  with an automated test, except three toolchain-dependent demos (OpenMP, MPI, CUDA device run) and
-  three reading/history topics (see `docs/reports/full_syllabus_checklist.md`)
+  with an automated test, except three reading/history topics (see
+  `docs/reports/full_syllabus_checklist.md`)
 - Build: CMake + Ninja, C++20; verified with Clang 22 (zig toolchain) on Windows 11
 - Tests: 65 CTest tests, 64 passed and 1 skipped (`nexus_toolchain_compare` needs `clang` in PATH);
   the OpenMP and MPI benchmark tests are not registered when those toolchains are absent
+- Colab (Tesla T4, CUDA 13.0, GCC 13.3, OpenMPI, Yosys): 68 CTest tests including OpenMP, MPI, the
+  bench wrapper and the CUDA demo; all passed after the type-printing fix below (`results/colab/`)
 - HDL: Icarus Verilog for the 9 testbench suites and the RTL co-simulation, Yosys for synthesis
 
 ## What 1.0.0 Added Over 0.11
@@ -47,4 +49,11 @@ program on the cached pipeline).
   thread blocks or shared memory, and cycle counts are model metrics, not hardware measurements;
 - the HDL core is verified in simulation and synthesised generically, not placed and routed on an FPGA;
 - NexusLang has `int`, `bool` and arrays only (no floating point, pointers or globals);
-- OpenMP, MPI and CUDA demos need their toolchains and were not run on the Windows verification host.
+- OpenMP, MPI and CUDA demos need their toolchains; they were run on Colab, not on the Windows host.
+
+## Portability Fix From The Colab Run
+
+`nexus_type_inference_test` failed under GCC: the inferred types were correct but their variables
+were named in a different order (`('c -> 'a) -> ...` instead of `('a -> 'b) -> ...`). The printer built
+`show(a) + " -> " + show(b)`, and C++ leaves the evaluation order of the two calls unspecified (GCC
+evaluated the right side first). It now prints the two sides in separate statements.

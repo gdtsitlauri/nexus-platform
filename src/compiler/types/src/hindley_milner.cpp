@@ -463,11 +463,17 @@ class Inferencer {
       return found->second;
     }
     if (type->name == "->") {
-      const std::string text = show(type->args[0], names, true) + " -> " + show(type->args[1], names, false);
+      // Name type variables left to right: the order in which operands of `+` are evaluated is
+      // unspecified in C++ (GCC and Clang differ), so the two sides are printed in separate statements.
+      const std::string from = show(type->args[0], names, true);
+      const std::string to = show(type->args[1], names, false);
+      const std::string text = from + " -> " + to;
       return parenthesize_arrow ? "(" + text + ")" : text;
     }
     if (type->name == "*") {
-      return "(" + show(type->args[0], names, true) + " * " + show(type->args[1], names, true) + ")";
+      const std::string first = show(type->args[0], names, true);
+      const std::string second = show(type->args[1], names, true);
+      return "(" + first + " * " + second + ")";
     }
     if (type->name == "list") {
       return show(type->args[0], names, true) + " list";
