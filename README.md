@@ -138,7 +138,7 @@ All numbers come from `ctest` and the commands in `docs/`; the full record is `d
 
 ```
 nexus-platform/
-  README.md, README_GR.md, LICENSE (MIT), CITATION.cff, CHANGELOG.md, STATUS.md, ARCHITECTURE.md
+  README.md, LICENSE (MIT), CITATION.cff, CHANGELOG.md, STATUS.md, ARCHITECTURE.md
   src/
     compiler/   frontend, semantics, ir, analysis (incl. SSA/SCCP), passes, backend_mips (incl. register
                 allocation), isa_styles, formal (automata, grammars), types (Hindley-Milner), polyhedral,

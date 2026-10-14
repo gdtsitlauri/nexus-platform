@@ -78,7 +78,6 @@ def check_final(root: Path) -> None:
     require("[2.0.0]" in changelog, "CHANGELOG.md missing the 2.0.0 entry")
 
     for relative in (
-        "README_GR.md",
         "CITATION.cff",
         "scripts/test_hdl.py",
         "hdl-test",
