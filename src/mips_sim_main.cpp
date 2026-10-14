@@ -396,6 +396,10 @@ int main(int argc, char** argv) {
       std::cout << image;
     }
     std::cerr << "entry " << loaded.program->entry_point << " words " << encoded.words.size() << '\n';
+    const auto handler = loaded.program->labels.find("interrupt_handler");
+    if (handler != loaded.program->labels.end()) {
+      std::cerr << "handler " << handler->second << '\n';  // for the SoC's interrupt vector
+    }
     return 0;
   }
 
@@ -789,6 +793,9 @@ int main(int argc, char** argv) {
     for (const auto& line : result.trace_lines) {
       std::cout << line << '\n';
     }
+    for (const auto value : result.console_bytes) {
+      std::cout << "io[console]: value=" << value << '\n';
+    }
     return print_summary({
         .mode = "functional",
         .cores = std::nullopt,
@@ -844,6 +851,9 @@ int main(int argc, char** argv) {
 
   if (mode == "single-cycle") {
     const auto result = nexus::sim::single_cycle::run_program(*parsed.program, {.trace = trace});
+    for (const auto value : result.console_bytes) {
+      std::cout << "io[console]: value=" << value << '\n';
+    }
     if (!result.success) {
       std::cerr << "error: " << result.error << '\n';
       return 1;
@@ -1091,6 +1101,9 @@ int main(int argc, char** argv) {
     advanced_options.cdb_width = cdb_width.value_or(advanced_options.cdb_width);
     advanced_options.smt_program = smt_program.has_value() ? &*smt_program : nullptr;
     const auto result = nexus::sim::advanced::run_program(*parsed.program, advanced_options);
+    for (const auto value : result.console_bytes) {
+      std::cout << "io[console]: value=" << value << '\n';
+    }
     if (!result.success) {
       std::cerr << "error: " << result.error << '\n';
       return 1;
@@ -1219,6 +1232,9 @@ int main(int argc, char** argv) {
             .interconnect = *interconnect,
             .core_cpi = core_cpi,
         });
+        for (const auto value : result.console_bytes) {
+          std::cout << "io[console]: value=" << value << '\n';
+        }
     if (!result.success) {
       std::cerr << "error: " << result.error << '\n';
       return 1;
@@ -1313,6 +1329,9 @@ int main(int argc, char** argv) {
   }
 
   const auto result = nexus::sim::multi_cycle::run_program(*parsed.program, {.trace = trace, .control = *control});
+  for (const auto value : result.console_bytes) {
+    std::cout << "io[console]: value=" << value << '\n';
+  }
   if (!result.success) {
     std::cerr << "error: " << result.error << '\n';
     return 1;

@@ -28,6 +28,9 @@ using mips::loader::LoadedProgram;
 constexpr std::int32_t kHaltReturnAddress = std::numeric_limits<std::int32_t>::min();
 constexpr std::size_t kStackGuardWords = 16;
 constexpr std::int32_t kSyncBaseAddress = 0x00020000;
+// the console/UART registers of the NEXUS memory map: same addresses in every model and in the SoC
+constexpr std::int32_t kConsoleData = 0x00010000;
+constexpr std::int32_t kConsoleStatus = 0x00010004;
 constexpr std::int32_t kLockAcquireAddress = kSyncBaseAddress;
 constexpr std::int32_t kLockReleaseAddress = kSyncBaseAddress + 4;
 constexpr std::int32_t kBarrierAddress = kSyncBaseAddress + 8;
@@ -269,6 +272,10 @@ MemoryAccessResult load_word(
     std::int32_t address) {
   MemoryAccessResult access;
 
+  if (address == kConsoleStatus) {
+    access.value = 1;  // console always ready
+    return access;
+  }
   if (address == kAtomicFetchIncAddress) {
     access.value = shared.atomic_counter;
     shared.atomic_counter += 1;
@@ -364,6 +371,10 @@ MemoryAccessResult store_word(
     std::int32_t value) {
   MemoryAccessResult access;
 
+  if (address == kConsoleData) {
+    result.console_bytes.push_back(value);
+    return access;
+  }
   if (address == kLockAcquireAddress) {
     if (!shared.lock_owner.has_value() || *shared.lock_owner == core_id) {
       shared.lock_owner = core_id;

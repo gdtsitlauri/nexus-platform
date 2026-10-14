@@ -606,6 +606,28 @@ CodegenResult lower_module(const ir::Module& module, const CodegenOptions& optio
         result.diagnostics.end(), emitter.diagnostics().begin(), emitter.diagnostics().end());
   }
 
+  // runtime for the built-in putc: poll the UART status register, then transmit (0x10000 / 0x10004)
+  bool defines_putc = false;
+  bool calls_putc = false;
+  for (const auto& function : module.functions) {
+    defines_putc = defines_putc || function.name == "putc";
+    for (const auto& block : function.blocks) {
+      for (const auto& instruction : block.instructions) {
+        calls_putc = calls_putc || (instruction.kind == InstructionKind::Call && instruction.callee == "putc");
+      }
+    }
+  }
+  if (calls_putc && !defines_putc) {
+    mips::assembler_support::append_label(program, "putc");
+    mips::assembler_support::append_instruction(program, "lui", {"$t8", "1"});
+    mips::assembler_support::append_label(program, "putc_wait");
+    mips::assembler_support::append_instruction(program, "lw", {"$t9", "4($t8)"});
+    mips::assembler_support::append_instruction(program, "beq", {"$t9", "$zero", "putc_wait"});
+    mips::assembler_support::append_instruction(program, "sw", {"$a0", "0($t8)"});
+    mips::assembler_support::append_instruction(program, "addu", {"$v0", "$a0", "$zero"});
+    mips::assembler_support::append_instruction(program, "jr", {"$ra"});
+  }
+
   if (result.diagnostics.empty()) {
     result.program = std::move(program);
   }

@@ -14,6 +14,9 @@
   `$ra` halts after the pipeline drains, with the exit code in `$v0`;
 - a program-load port (`imem_we`) writes instruction memory, so the core can be used without a
   simulator-only `$readmemh`.
+- with `ENABLE_IO=1` (used by the SoC), loads and stores at 0x10000 and above go to a memory-mapped
+  I/O port, and an `irq` input drains the pipeline and enters the interrupt handler with the return
+  PC in `$ra`; the default `ENABLE_IO=0` is the core described above.
 
 ## Toolchain flow
 
@@ -37,5 +40,6 @@ flip-flops.
 ## Limits
 
 Multiply and divide are single-cycle combinational blocks (the iterative units in `src/hdl/alu/`
-show the multi-cycle alternative). Memories are plain arrays, not vendor block RAM. The core has not
-been placed and routed on an FPGA.
+show the multi-cycle alternative). Memories are plain arrays, not vendor block RAM. Inside the SoC
+(`docs/embedded/embedded_soc.md`) the core is placed and routed on a Lattice ECP5 and a bitstream is
+produced; the combinational divider limits it to 6.8 MHz there, and it has not been run on a board.

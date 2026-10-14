@@ -181,3 +181,30 @@ add_test(
     "$<TARGET_FILE:nexusc>"
     "$<TARGET_FILE:mips_sim>"
     "${PROJECT_SOURCE_DIR}")
+
+add_test(
+  NAME nexus_eda_cli
+  COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/eda_cli_test.py"
+          "$<TARGET_FILE:nexus_eda>" "${PROJECT_SOURCE_DIR}")
+add_test(NAME nexus_hdl_logic_comb COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/test_hdl.py" logic-comb)
+add_test(NAME nexus_hdl_logic_seq COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/test_hdl.py" logic-seq)
+set_tests_properties(nexus_hdl_logic_comb nexus_hdl_logic_seq PROPERTIES SKIP_RETURN_CODE 77)
+add_test(
+  NAME nexus_os_cli
+  COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/os_cli_test.py"
+          "$<TARGET_FILE:nexus_os_cli>" "$<TARGET_FILE:mips_sim>" "${PROJECT_SOURCE_DIR}")
+add_test(
+  NAME nexus_soc_levels
+  COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/soc_flow.py" "$<TARGET_FILE:mips_sim>" --gates)
+add_test(
+  NAME nexus_soc_fpga
+  COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/soc_flow.py" "$<TARGET_FILE:mips_sim>" --fpga)
+add_test(
+  NAME nexus_full_flow
+  COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/nexus_flow.py" "$<TARGET_FILE_DIR:mips_sim>" --gates --fpga)
+set_tests_properties(nexus_soc_levels nexus_soc_fpga nexus_full_flow PROPERTIES SKIP_RETURN_CODE 77 RESOURCE_LOCK soc_build)
+add_test(NAME nexus_embedded_rt_cli COMMAND $<TARGET_FILE:nexus_embedded_cli> rt "${PROJECT_SOURCE_DIR}/examples/embedded/tasks.rt")
+set_tests_properties(nexus_embedded_rt_cli PROPERTIES PASS_REGULAR_EXPRESSION "t3: R = 10")
+add_test(NAME nexus_posix_lab COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/posix_test.py"
+                                      "${PROJECT_BINARY_DIR}")
+set_tests_properties(nexus_posix_lab PROPERTIES SKIP_RETURN_CODE 77)

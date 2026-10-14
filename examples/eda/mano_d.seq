@@ -1,0 +1,9 @@
+# Sequential circuit for analysis (two D flip-flops A, B, input x, output y):
+#   A(t+1) = A x + B x,  B(t+1) = A' x,  y = (A + B) x'
+flipflop D
+state A B
+inputs x
+reset 00
+D A = A x + B x
+D B = A' x
+out y = (A + B) x'

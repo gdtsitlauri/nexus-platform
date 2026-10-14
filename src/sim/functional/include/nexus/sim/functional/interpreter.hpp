@@ -22,6 +22,7 @@ struct RunResult {
   std::string error;
   std::size_t executed_instructions = 0;
   std::vector<std::string> trace_lines;
+  std::vector<std::int32_t> console_bytes;  // words stored to the console/UART data register (0x10000)
   std::array<std::int32_t, 32> registers{};
 };
 

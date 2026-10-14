@@ -1,11 +1,11 @@
-# Validation Report (version 1.0.0)
+# Validation Report (version 2.0.0)
 
 ## Environment
 
-- Date: 2026-10-05
+- Date: 2026-10-14 (version 2.0.0; the 1.0.0 run was on 2026-10-05)
 - Host: Windows 11 Pro, 12-core CPU
 - Toolchain: CMake 3.30.5, Ninja 1.12.1, Clang 22 (zig c++), win_flex/win_bison 2.5.25, Python 3.12,
-  Icarus Verilog and Yosys from the OSS CAD Suite
+  Icarus Verilog, Yosys, nextpnr-ecp5 and ecppack from the OSS CAD Suite
 - Build: `cmake -S . -B build -G Ninja && cmake --build build` (150 targets, no errors)
 
 ## Full Suite
@@ -14,7 +14,9 @@
 cd build && ctest --output-on-failure -j8
 ```
 
-65 tests: 64 passed, 1 skipped (`nexus_toolchain_compare`, `clang` not in PATH). The OpenMP and MPI
+78 tests: 76 passed, 2 skipped (`nexus_toolchain_compare`, `clang` not in PATH; `nexus_posix_lab`, not a
+POSIX system). The new code builds without warnings under `-Wall -Wextra -Wconversion
+-Wsign-conversion`. The OpenMP and MPI
 benchmark tests are not registered on this host because no OpenMP-capable compiler and no `mpicxx`
 were found; `nexus_gpu_optional` passes through its CUDA-disabled path.
 
@@ -34,6 +36,38 @@ were found; `nexus_gpu_optional` passes through its CUDA-disabled path.
 | Fourier-Motzkin dependence tests | enumeration of the concrete domain | 120 random nests | no missed dependence |
 | SIMT kernels | closed form and warp size 1 | 64-96 threads | equal |
 | SPMD reduction | closed form | 1-64 cores x 5 networks | equal |
+| NAND/NOR-only rewriting, BDD canonicity and model counts | truth tables | 300 + 200 random expressions | equal |
+| CDCL SAT solver | brute-force enumeration | 300 random 3-SAT formulas | equal |
+| PLA row minimisation | brute-force search over all cubes; truth tables | 20 + 80 random multi-output functions | minimal and correct |
+| Hamming SEC decoding | every single-bit error | 40 random words per size | all corrected |
+| FSM minimisation | product-machine equivalence | 120 random machines | equivalent and minimal |
+| synthesised FSM Verilog (behavioural and structural) | state-table simulation in Icarus Verilog | 2 machines x 4 encodings/flip-flops, 64 random inputs | equal |
+| logical-effort path sizing | numerical optimisation | 20 random paths | equal (1e-5) |
+| static CMOS complex gates | exhaustive switch-level simulation | 60 random pull-down networks | complementary, correct function |
+| technology mapping | SAT miter; Yosys `sat -prove` on c17 and the control unit | 25 random circuits + 2 designs | proved equivalent |
+| static timing | path enumeration | 25 random circuits | equal |
+| stuck-at faults | random patterns + SAT ATPG | 6 random circuits | every fault detected or proved redundant |
+| A* routing | Lee wave expansion | 40 random grids | same optimal cost, fewer expansions |
+| Steiner trees | exact RSMT | 30 random nets | RSMT <= 1-Steiner <= MST <= 1.5 RSMT |
+| SRT / SPN scheduling | other policies; exhaustive non-preemptive optimum | 200 random workloads | SRT minimal, SPN optimal |
+| Banker's safety | enumeration of all orders | 300 random states | equal |
+| page replacement | OPT lower bound, LRU stack property | 200 random strings | hold |
+| response-time analysis, EDF test | simulation over the hyperperiod | 400 random task sets | equal |
+| SoC programs | C++ pipeline model, RTL, gate-level netlist | 3 programs | identical exit codes, UART text, interrupt counts |
+| the full flow (`nexus_full_flow`) | one compiled program on 10 CPU models x 2 allocators, SoC RTL, gate level; control unit mapped and proved; kernel vs RR Gantt | 1 program, 1 kernel | identical UART text and exit code; dispatch order = Gantt chart |
+| ECP5 bitstream | read back with ecpunpack (device ID, 13294 frames, DONE) | 1 design | valid |
+
+## Linux / GCC Run of Version 2.0.0 (Google Colab, 2026-10-14)
+
+The 2.0.0 tree was built with GCC on Colab (Ubuntu, Icarus Verilog and Yosys from apt, OpenMPI and
+OpenMP present, no nextpnr): 81 CTest tests, 79 passed, 2 skipped (`nexus_toolchain_compare`, no
+clang; `nexus_soc_fpga`, no nextpnr). This includes `nexus_full_flow` (every stage except the FPGA),
+`nexus_posix_lab`, the OpenMP and MPI benchmarks, the gate-level SoC run and
+`nexus_type_inference_test` (the GCC evaluation-order fix of 1.0.0). With the Yosys version of Colab
+the control unit maps to 260 cells (263 with the Yosys of the Windows host); the equivalence proof and
+the routing (overflow 0) hold with both. The
+first attempt exposed two headers that Clang's library included implicitly and GCC's does not
+(`<limits>`, `<cmath>`); they are now included explicitly. Summary: `results/colab/linux_gcc_2.0.0.md`.
 
 ## Defects Found In The 0.11 Code
 

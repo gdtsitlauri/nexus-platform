@@ -33,6 +33,10 @@ std::int32_t& reg(State& state, Register reg) {
   return state.regs[mips::isa::register_index(reg)];
 }
 
+// the console/UART registers of the NEXUS memory map: same addresses in every model and in the SoC
+constexpr std::int32_t kConsoleData = 0x00010000;
+constexpr std::int32_t kConsoleStatus = 0x00010004;
+
 std::int32_t& checked_word_at(State& state, std::int32_t address, std::string& error) {
   static std::int32_t dummy = 0;
   if (address < 0 || (address % 4) != 0) {
@@ -192,6 +196,10 @@ RunResult run_program(const LoadedProgram& program, const RunOptions& options) {
             0,
             common::AdderStyle::Native);
         memory_address = addr.value;
+        if (addr.value == kConsoleStatus) {
+          write_value = 1;  // console always ready
+          break;
+        }
         write_value = checked_word_at(state, addr.value, error);
         if (!error.empty()) {
           result.error = error;
@@ -208,6 +216,10 @@ RunResult run_program(const LoadedProgram& program, const RunOptions& options) {
             0,
             common::AdderStyle::Native);
         memory_address = addr.value;
+        if (addr.value == kConsoleData) {
+          result.console_bytes.push_back(rt_value);
+          break;
+        }
         checked_word_at(state, addr.value, error) = rt_value;
         if (!error.empty()) {
           result.error = error;

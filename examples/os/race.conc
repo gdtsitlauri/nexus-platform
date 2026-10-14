@@ -1,0 +1,11 @@
+# Lost update: count++ is load / add / store, not atomic.
+shared count=0
+thread T0
+  load %a count
+  add %a 1
+  store count %a
+thread T1
+  load %a count
+  add %a 1
+  store count %a
+assert count 2

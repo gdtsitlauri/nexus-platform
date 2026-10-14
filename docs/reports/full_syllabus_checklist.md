@@ -1,16 +1,17 @@
-# Full Syllabus Checklist (version 1.0.0)
+# Full Syllabus Checklist (version 2.0.0)
 
-Every topic of the six course outlines in `docs/course_outlines/` mapped to the code that implements
+Every topic of the ten course outlines in `docs/course_outlines/` mapped to the code that implements
 it and the automated test that checks it. Test names are CTest names (`ctest -R <name>`).
 
 ## Status Legend
 
 - **implemented and tested**: executable code plus an automated check in `ctest`
 - **implemented, toolchain-dependent**: executable code whose test runs only when an external
-  toolchain is installed (OpenMP compiler, MPI, CUDA, clang); the test is skipped otherwise
+  toolchain is installed (OpenMP compiler, MPI, CUDA, clang, Yosys + nextpnr, a POSIX system); the test is
+  skipped otherwise
 - **notes**: topics that are not programs (history, reading lists, taxonomies); covered in `docs/`
 
-No topic of the six outlines is left outside the project.
+No topic of the ten outlines is left outside the project.
 
 ## 1. NEY221 Principles of Computer Operation
 
@@ -121,3 +122,79 @@ No topic of the six outlines is left outside the project.
 | interconnects: bus, switch, ring, 2-D mesh NoC | implemented and tested | `--interconnect bus / switch / ring / mesh / noc-lite` | `nexus_interconnect_test`, `nexus_manycore` |
 | manycore (up to 64 cores) | implemented and tested | SPMD reduction on 1-64 cores | `nexus_manycore` |
 | literature study | notes | `docs/literature/parallel_readings.md` | `nexus_literature_docs` |
+
+## 7. EY121 Logic Design
+
+| Topic | Status | Code | Test |
+| --- | --- | --- | --- |
+| number systems and codes | implemented and tested | `src/common/src/number_systems.cpp` (bases, complements, BCD); `src/logic/src/codes.cpp` (Gray, parity, Hamming SEC; `nexus-eda gray`, `nexus-eda hamming`) | `nexus_number_systems_test`, `nexus_logic_test` |
+| Boolean algebra | implemented and tested | `src/logic/src/boolean.cpp`: expressions, evaluation, identities checked by truth table, BDD and SAT (`nexus-eda equiv`) | `nexus_logic_test`, `nexus_eda_cli` |
+| basic logic gates, universal gates | implemented and tested | gate-level simulator (`src/logic/src/gatesim.cpp`); NAND-only and NOR-only rewriting (`nexus-eda nand`, `nexus-eda nor`) | `nexus_logic_test` |
+| truth tables | implemented and tested | `nexus-eda truth`: table, minterms, maxterms | `nexus_logic_test`, `nexus_eda_cli` |
+| Karnaugh-map simplification | implemented and tested | `karnaugh_map` (2-4 variables, Gray order, groups of the minimal cover; printed by `nexus-eda minimize`) | `nexus_logic_test`, `nexus_eda_cli` |
+| Quine-McCluskey simplification | implemented and tested | tabulation, prime implicants, essential primes, Petrick's method and an exact branch-and-bound cover, don't cares, minimal POS (`nexus-eda minimize`); checked against exhaustive search | `nexus_logic_test`, `nexus_eda_cli` |
+| canonical forms and other representations (BDD, CNF) | implemented and tested | canonical SOP/POS; reduced ordered BDDs with variable orders; Tseitin CNF and a CDCL SAT solver (`nexus-eda bdd`, `cnf`, `sat`) | `nexus_logic_test`, `nexus_eda_cli` |
+| combinational building blocks | implemented and tested | `src/hdl/logic/nexus_combinational.v`: multiplexer, decoder, priority encoder, comparator, BCD to 7-segment, Gray converter; adders in `src/hdl/alu/` | `nexus_hdl_logic_comb`, `nexus_hdl_adder` |
+| combinational circuit design | implemented and tested | specification -> minimised two-level cover -> NAND/NOR network or mapped standard cells (`nexus-eda synth`) | `nexus_logic_test`, `nexus_vlsi_test` |
+| programmable combinational circuits (ROM, PLA, PAL) | implemented and tested | `src/logic/src/pla.cpp` (`nexus-eda pla`): multi-output minimisation with shared product terms and output inversion for a PLA (minimum row count checked against brute force), PAL terms per output, ROM table; look-up tables in the FPGA flow | `nexus_logic_test`, `nexus_eda_cli`, `nexus_soc_fpga` |
+| sequential elements (latches, flip-flops) | implemented and tested | SR NOR latch, gated D latch and master-slave flip-flop at gate level with delays, races and oscillation (`nexus-eda latch`); D, JK and T flip-flops in Verilog | `nexus_logic_test`, `nexus_hdl_logic_seq` |
+| sequential circuits | implemented and tested | universal shift register, synchronous modulo-N up/down counter, ripple counter (`src/hdl/logic/nexus_sequential.v`) | `nexus_hdl_logic_seq` |
+| state diagrams and tables, state minimisation | implemented and tested | `src/logic/src/fsm.cpp`: Mealy and Moore machines, state tables, partition-refinement minimisation, equivalence by product machine (`nexus-eda fsm table`, `fsm minimize`) | `nexus_logic_test`, `nexus_eda_cli` |
+| analysis of sequential circuits | implemented and tested | flip-flop and output equations -> state table (`nexus-eda analyze`) | `nexus_logic_test`, `nexus_eda_cli` |
+| synthesis of sequential circuits | implemented and tested | state assignment (binary, Gray, one-hot), excitation tables for D, T and JK, minimised equations, structural Verilog co-simulated with Icarus against the behavioural machine (`nexus-eda fsm synth`, `fsm verilog`) | `nexus_logic_test`, `nexus_eda_cli` |
+
+## 8. EY517 Operating Systems
+
+| Topic | Status | Code | Test |
+| --- | --- | --- | --- |
+| computer system overview | implemented and tested | CPU, memory hierarchy, I/O, interrupt and DMA models of the earlier courses; the SoC with timer interrupts (`src/hdl/soc/`) | `nexus_io_system_test`, `nexus_soc_levels` |
+| operating system overview | implemented and tested | a preemptive round-robin kernel for the NEXUS CPU: timer interrupts, process control blocks, context switches (`examples/os/rr_kernel.s`); on the C++ model and the SoC RTL its dispatch order equals the RR Gantt chart of the scheduling library | `nexus_os_cli`, `nexus_soc_levels`, `nexus_full_flow` |
+| process description and control | implemented and tested | seven-state process model with legal transitions and PCB history (`src/os/src/scheduling.cpp`) | `nexus_os_test` |
+| threads | implemented and tested | `std::thread` workloads on the synchronisation primitives | `nexus_os_test` |
+| concurrency: mutual exclusion and synchronisation | implemented and tested | explicit-state model checker over all interleavings (race, Peterson, broken flag protocols, test-and-set, semaphores, bounded buffer; `nexus-os check`); Peterson lock, semaphores, bounded buffer and readers-writers on real threads | `nexus_os_test`, `nexus_os_cli` |
+| concurrency: deadlock and starvation | implemented and tested | Banker's algorithm (safety and requests, checked against exhaustive search), detection with requests, wait-for cycles, dining-philosophers deadlock and its prevention by resource ordering; readers-writers lock with writer preference (`nexus-os banker`, `nexus-os check`) | `nexus_os_test`, `nexus_os_cli` |
+| memory management | implemented and tested | first/next/best/worst fit with coalescing and compaction, buddy system, paging (`src/os/src/resources.cpp`; `nexus-os alloc`) | `nexus_os_test` |
+| virtual memory | implemented and tested | two-level page tables with an LRU TLB and effective access time; FIFO, LRU, OPT and Clock replacement, Belady's anomaly, stack property, working sets (`nexus-os pages`) | `nexus_os_test`, `nexus_os_cli` |
+| uniprocessor scheduling | implemented and tested | FCFS, RR, SPN, SRT, HRRN, priority and feedback with Gantt charts and metrics; the textbook five-process example reproduced (`nexus-os schedule`) | `nexus_os_test`, `nexus_os_cli` |
+| I/O management and disk scheduling | implemented and tested | FIFO, SSTF, SCAN, C-SCAN, LOOK, C-LOOK against the exhaustive optimum; RAID 5 with reconstruction (`nexus-os disk`); polled and interrupt-driven I/O in the SoC | `nexus_os_test`, `nexus_os_cli`, `nexus_soc_levels` |
+| file management | implemented and tested | Unix-like file system: inodes with direct, single and double indirect blocks, directories, hard links, free-block bitmap, fsck (`nexus-os fs`) | `nexus_os_test` |
+| Linux usage (laboratory) | implemented, toolchain-dependent | `examples/os/posix/`: fork/pipe/wait, exec and signals, POSIX threads with mutex and condition variable | `nexus_posix_lab` (Linux or macOS only; passed on Colab Linux/GCC) |
+
+## 9. NEY604 Embedded Systems and Microprocessors
+
+| Topic | Status | Code | Test |
+| --- | --- | --- | --- |
+| microprocessor structure | implemented and tested | single-cycle, multi-cycle and pipelined MIPS models; the synthesisable 5-stage Verilog core | `nexus_hdl_pipeline_cosim`, `nexus_cross_model_differential` |
+| registers | implemented and tested | register file in Verilog; architectural registers in every model | `nexus_hdl_register_file`, `nexus_mips_functional_test` |
+| microprocessor arithmetic | implemented and tested | ALU, iterative multiplier and divider (Verilog); integer and floating-point arithmetic | `nexus_hdl_alu`, `nexus_arithmetic_units_test` |
+| memory | implemented and tested | caches and memory hierarchy; the SoC memory map (instruction and data memory, memory-mapped devices) | `nexus_memory_cache_test`, `nexus_soc_levels` |
+| communication with external devices | implemented and tested | memory-mapped I/O bus, UART transmitter (8N1 serial line decoded by the testbench), GPIO, timer with interrupts; polling and interrupt-driven programs (`src/hdl/soc/`, `examples/embedded/`) | `nexus_soc_levels` |
+| definition, characteristics and constraints of embedded systems | implemented and tested | real-time scheduling: Liu-Layland and hyperbolic bounds, exact response-time analysis, EDF, rate- and deadline-monotonic simulation, priority inversion with priority inheritance (`src/embedded/`; `nexus-embedded rt`) | `nexus_embedded_test`, `nexus_embedded_rt_cli` |
+| modelling of embedded systems | implemented and tested | finite-state machines (EY121 tools), synchronous dataflow (repetition vector, schedule, buffers, deadlock), Petri nets (reachability, boundedness, deadlock) | `nexus_embedded_test`, `nexus_logic_test` |
+| embedded-system architectures | implemented and tested | SoC: CPU, bus decoder, peripherals and interrupt line; the round-robin kernel on it | `nexus_soc_levels` |
+| ASIC | implemented and tested | RTL -> Yosys -> standard-cell mapping, timing, power, placement and routing in `nexus-eda` (NEY705 section) | `nexus_eda_cli`, `nexus_vlsi_test` |
+| FPGA | implemented, toolchain-dependent | `src/hdl/soc/nexus_soc_fpga.v` with a boot ROM; Yosys synth_ecp5, nextpnr-ecp5 placement and routing, ecppack bitstream (no board test) | `nexus_soc_fpga` (needs Yosys and nextpnr) |
+| system on chip | implemented and tested | `src/hdl/soc/nexus_soc.v` | `nexus_soc_levels` |
+| levels of abstraction | implemented and tested | compute programs agree between the ISA-level simulator and the RTL core (exit code and instruction count); I/O and interrupt programs agree between the CPU models, the Verilog SoC and its synthesised gate-level netlist; one compiled program goes through every level (`scripts/nexus_flow.py`) | `nexus_hdl_pipeline_cosim`, `nexus_soc_levels`, `nexus_full_flow` |
+| hardware description languages | implemented and tested | Verilog throughout `src/hdl/` with self-checking testbenches | `nexus_hdl_all`, `nexus_soc_levels` |
+| design and implementation on FPGA | implemented, toolchain-dependent | utilisation and maximum frequency reported by `scripts/soc_flow.py --fpga` | `nexus_soc_fpga` (needs Yosys and nextpnr) |
+
+## 10. NEY705 VLSI Design
+
+| Topic | Status | Code | Test |
+| --- | --- | --- | --- |
+| CMOS logic, basic gates and memory elements | implemented and tested | switch-level simulator with strengths and X resolution (`src/vlsi/src/cmos.cpp`); static CMOS complex gates from a pull-down expression; 6T SRAM write and read (`nexus-eda cmos`, `nexus-eda sram`) | `nexus_vlsi_test`, `nexus_eda_cli` |
+| layout-level design | implemented and tested | Euler-path transistor ordering, stick diagrams, lambda-rule cell layout and a design-rule checker | `nexus_vlsi_test`, `nexus_eda_cli` |
+| delay estimation (logical effort) | implemented and tested | logical effort and parasitic delay from transistor sizing; path analysis (F = GBH, best stage count, sizing) checked against numerical optimisation; fanout buffering (`nexus-eda effort`) | `nexus_vlsi_test`, `nexus_eda_cli` |
+| hardware description languages | implemented and tested | Verilog designs and testbenches (`src/hdl/`) | `nexus_hdl_all` |
+| integrated-circuit design flows | implemented and tested | RTL -> Yosys -> BLIF -> `nexus-eda` (technology mapping, STA, partitioning, placement, routing with routed-wire timing); RTL -> FPGA bitstream. No GDSII is produced | `nexus_eda_cli`, `nexus_soc_fpga` |
+| VLSI design with EDA/CAD tools | implemented and tested | Yosys, Icarus Verilog and nextpnr together with the project's own tools | `nexus_eda_cli`, `nexus_soc_levels` |
+| behavioural simulation | implemented and tested | Icarus Verilog testbenches for every module, the CPU and the SoC | `nexus_hdl_all`, `nexus_soc_levels` |
+| synthesis and equivalence checking | implemented and tested | and-inverter graphs with structural hashing, BLIF input, cut-based technology mapping; equivalence by random simulation plus a SAT miter (expressions also by BDDs, `nexus-eda equiv`); the mapped netlists are also proved equivalent by Yosys | `nexus_vlsi_test`, `nexus_eda_cli` |
+| synthesis algorithms | implemented and tested | Quine-McCluskey/Petrick two-level minimisation, AIG balancing, cut mapping, FSM state assignment | `nexus_logic_test`, `nexus_vlsi_test` |
+| power and timing analysis | implemented and tested | static timing (arrival, required, slack, critical path) checked against path enumeration; dynamic power from simulated and probabilistic switching activity | `nexus_vlsi_test`, `nexus_eda_cli` |
+| circuit testing | implemented and tested | single stuck-at fault simulation and SAT-based test generation; redundant faults proved untestable (`nexus-eda faults`) | `nexus_vlsi_test` |
+| floorplanning and placement | implemented and tested | slicing floorplans (`nexus-eda floorplan`), standard-cell placement with legalisation (`nexus-eda place`) | `nexus_vlsi_test`, `nexus_eda_cli` |
+| placement algorithms | implemented and tested | Kernighan-Lin and Fiduccia-Mattheyses partitioning, quadratic placement with conjugate gradients, min-cut placement, simulated annealing; Wong-Liu floorplan annealing against the exact slicing optimum | `nexus_vlsi_test` |
+| routing | implemented and tested | two-layer global routing with vias and negotiated congestion (PathFinder) of placed designs (`nexus-eda flow`) | `nexus_vlsi_test`, `nexus_eda_cli` |
+| routing algorithms | implemented and tested | Lee wave expansion, A*, left-edge channel routing with vertical constraints, rectilinear MST, iterated 1-Steiner and exact Steiner trees (`nexus-eda channel`, `nexus-eda steiner`) | `nexus_vlsi_test`, `nexus_eda_cli` |

@@ -30,6 +30,8 @@ SUITES: dict[str, list[str]] = {
         "cpu_slice/nexus_cpu_slice.v",
         "cpu_slice/cpu_slice_tb.v",
     ],
+    "logic-comb": ["logic/nexus_combinational.v", "logic/combinational_tb.v"],
+    "logic-seq": ["logic/nexus_sequential.v", "logic/sequential_tb.v"],
 }
 
 

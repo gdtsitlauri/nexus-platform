@@ -1,5 +1,37 @@
 # Changelog
 
+## [2.0.0] - 2026-10-14
+
+Four more course outlines covered (EY121 Logic Design, EY517 Operating Systems, NEY604 Embedded Systems
+and Microprocessors, NEY705 VLSI Design); every topic of the ten outlines has code and an automated test.
+
+- Logic design (`src/logic/`, `nexus-eda`): Boolean expressions and truth tables, Quine-McCluskey with
+  Petrick's method and exact branch-and-bound covers, Karnaugh maps, ROBDDs, Tseitin CNF, a CDCL SAT
+  solver, Gray and Hamming codes, gate-level latches and flip-flops, FSM minimisation, analysis and
+  synthesis (binary/Gray/one-hot, D/T/JK) to Verilog; PLA programming with shared product terms and
+  output inversion, PAL and ROM (`nexus-eda pla`); combinational and sequential Verilog blocks
+- VLSI/EDA (`src/vlsi/`, `nexus-eda`): switch-level CMOS simulation with a 6T SRAM, complex-gate
+  sizing, Euler-path layout and DRC, logical effort, AIGs with BLIF I/O, cut-based technology mapping,
+  SAT equivalence (also checked by Yosys), static timing, power, stuck-at fault simulation and SAT
+  ATPG, KL/FM partitioning, slicing floorplans, quadratic/min-cut/annealing placement, Lee/A*/
+  PathFinder global routing, channel routing, Steiner trees
+- Operating systems (`src/os/`, `nexus-os`): process model and seven schedulers, an explicit-state
+  model checker for concurrent programs, synchronisation primitives on threads, Banker's algorithm and
+  deadlock detection, allocators and the buddy system, two-level paging with a TLB, page replacement,
+  disk scheduling, RAID 5, an inode file system with fsck; a round-robin kernel for the NEXUS CPU;
+  POSIX lab programs
+- Embedded systems (`src/hdl/soc/`, `src/embedded/`, `nexus-embedded`): memory-mapped I/O and timer
+  interrupts in the pipelined core (`ENABLE_IO`), a SoC with UART, timer and GPIO, cross-level checks
+  (C++ model, RTL, gate-level netlist), ECP5 place and route and bitstream (`scripts/soc_flow.py`),
+  real-time scheduling tests, priority inheritance, synchronous dataflow, Petri nets
+- The flow: one NexusLang program through compiler, all CPU models, Verilog SoC, gate-level netlist and
+  FPGA, with the CPU's control unit through the chip-design tools and the kernel checked against the
+  scheduling library (`scripts/nexus_flow.py`, `docs/FLOW.md`, CTest `nexus_full_flow`)
+- NexusLang built-in `putc` (UART at 0x10000); the console of the memory map in every CPU model
+- Round-robin kernel with three tasks whose dispatch order is reported on the UART
+- `mips-sim encode` reports the interrupt handler address
+- 13 new CTest tests (78 in total)
+
 ## [1.0.0] - 2026-10-05
 
 Complete coverage of the six course outlines; every topic now has code and an automated test.

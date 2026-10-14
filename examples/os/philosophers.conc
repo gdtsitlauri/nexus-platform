@@ -1,0 +1,17 @@
+# Three dining philosophers, every one takes the left fork first: a deadlock exists.
+shared f0=1 f1=1 f2=1
+thread Ph0
+  P f0
+  P f1
+  V f1
+  V f0
+thread Ph1
+  P f1
+  P f2
+  V f2
+  V f1
+thread Ph2
+  P f2
+  P f0
+  V f0
+  V f2

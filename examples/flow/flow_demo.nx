@@ -1,0 +1,30 @@
+// One program through the whole NEXUS flow: compiled to MIPS, run on every simulator, encoded for the
+// Verilog CPU inside the SoC, where putc drives the UART.
+fn print_int(n: int) -> int {
+  if (n >= 10) {
+    print_int(n / 10);
+  }
+  putc(48 + n % 10);
+  return 0;
+}
+
+fn factorial(n: int) -> int {
+  if (n <= 1) {
+    return 1;
+  }
+  return n * factorial(n - 1);
+}
+
+fn main() -> int {
+  var i: int = 1;
+  var sum: int = 0;
+  while (i <= 7) {
+    sum = sum + factorial(i);
+    i = i + 1;
+  }
+  putc(83);
+  putc(61);
+  print_int(sum);
+  putc(10);
+  return sum % 256;
+}

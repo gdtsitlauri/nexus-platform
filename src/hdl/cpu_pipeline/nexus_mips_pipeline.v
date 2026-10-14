@@ -11,9 +11,16 @@
 // The program counter counts instruction words (as in the Nexus simulators).  Execution halts when
 // `jr $ra` targets the sentinel 0x80000000 that reset places in $ra; the core then drains the
 // pipeline and raises `halted`, with the exit code in $v0.
+//
+// With ENABLE_IO = 1 (the NEXUS SoC, src/hdl/soc/) loads and stores to byte addresses >= 0x10000 go to the
+// memory-mapped I/O bus instead of data memory, and `irq` interrupts the core with the semantics of the C++
+// pipeline model: fetch stops, the pipeline drains, $ra receives the interrupted PC (its old value is kept),
+// the PC jumps to `irq_handler` and `irq_ack` pulses; `jr $ra` inside the handler returns and restores $ra.
+// With ENABLE_IO = 0 (default) the I/O ports are ignored and the core behaves exactly as before.
 module nexus_mips_pipeline #(
     parameter IMEM_WORDS = 4096,
-    parameter DMEM_WORDS = 16384
+    parameter DMEM_WORDS = 16384,
+    parameter ENABLE_IO = 0
 ) (
     input  wire        clk,
     input  wire        reset,
@@ -27,7 +34,17 @@ module nexus_mips_pipeline #(
     output reg  [31:0] retired,
     output reg  [31:0] cycles,
     output reg  [31:0] stalls,
-    output reg  [31:0] flushes
+    output reg  [31:0] flushes,
+    // memory-mapped I/O and interrupts (ENABLE_IO = 1)
+    output wire [31:0] io_addr,
+    output wire [31:0] io_wdata,
+    output wire        io_we,
+    output wire        io_re,
+    input  wire [31:0] io_rdata,
+    input  wire        irq,
+    input  wire [31:0] irq_handler,
+    output reg         irq_ack,
+    output reg  [31:0] interrupts
 );
   localparam [31:0] HALT_ADDRESS = 32'h80000000;
 
@@ -211,7 +228,22 @@ module nexus_mips_pipeline #(
 
   // ---------------------------------------------------------------- MEM
   wire [31:0] mem_word_index = {2'b00, exmem_alu[31:2]};
-  wire [31:0] mem_load = (mem_word_index < DMEM_WORDS) ? dmem[mem_word_index] : 32'd0;
+  wire        mem_is_io = (ENABLE_IO != 0) && exmem_valid && (exmem_mem_read || exmem_mem_write) &&
+                          exmem_alu >= 32'h00010000;
+  wire [31:0] mem_load = mem_is_io ? io_rdata
+                       : (mem_word_index < DMEM_WORDS) ? dmem[mem_word_index] : 32'd0;
+  assign io_addr  = exmem_alu;
+  assign io_wdata = exmem_store;
+  assign io_we    = mem_is_io && exmem_mem_write && !halted && !reset;
+  assign io_re    = mem_is_io && exmem_mem_read && !halted && !reset;
+
+  // ---------------------------------------------------------------- interrupts
+  reg        in_service;
+  reg [31:0] saved_ra;
+  wire irq_wanted = (ENABLE_IO != 0) && irq && !in_service && !fetch_stopped;
+  wire drained = !ifid_valid && !idex_valid && !exmem_valid && !memwb_valid;
+  wire dispatch = irq_wanted && drained;
+  wire irq_return = ex_jr && in_service && idex_rs == 5'd31;
 
   // ---------------------------------------------------------------- sequential logic
   always @(posedge clk) begin
@@ -241,8 +273,13 @@ module nexus_mips_pipeline #(
       end
       regs[29] <= (DMEM_WORDS - 16) * 4;  // $sp
       regs[31] <= HALT_ADDRESS;           // $ra
+      in_service <= 1'b0;
+      saved_ra <= 32'd0;
+      irq_ack <= 1'b0;
+      interrupts <= 32'd0;
     end else if (!halted) begin
       cycles <= cycles + 32'd1;
+      irq_ack <= 1'b0;
 
       // WB
       if (memwb_valid) begin
@@ -261,7 +298,7 @@ module nexus_mips_pipeline #(
       memwb_dest <= exmem_dest;
       memwb_reg_write <= exmem_reg_write;
       memwb_halt <= exmem_halt;
-      if (exmem_valid && exmem_mem_write && mem_word_index < DMEM_WORDS) begin
+      if (exmem_valid && exmem_mem_write && !mem_is_io && mem_word_index < DMEM_WORDS) begin
         dmem[mem_word_index] <= exmem_store;
       end
 
@@ -284,7 +321,19 @@ module nexus_mips_pipeline #(
       end
 
       // ID -> ID/EX, IF -> IF/ID, PC
-      if (ex_halt) begin
+      if (irq_return) begin
+        in_service <= 1'b0;
+        regs[31] <= saved_ra;  // the interrupted program's $ra
+      end
+      if (dispatch) begin
+        // the pipeline is empty: enter the handler with the interrupted PC in $ra
+        saved_ra <= regs[31];
+        regs[31] <= pc;
+        pc <= irq_handler;
+        in_service <= 1'b1;
+        irq_ack <= 1'b1;
+        interrupts <= interrupts + 32'd1;
+      end else if (ex_halt) begin
         fetch_stopped <= 1'b1;
         idex_valid <= 1'b0;
         ifid_valid <= 1'b0;
@@ -312,7 +361,7 @@ module nexus_mips_pipeline #(
         idex_mem_read <= id_op == OP_LW;
         idex_mem_write <= id_op == OP_SW;
         idex_jump_target <= ifid_instr[25:0];
-        if (!fetch_stopped && pc < IMEM_WORDS) begin
+        if (!fetch_stopped && !irq_wanted && pc < IMEM_WORDS) begin
           ifid_valid <= 1'b1;
           ifid_instr <= imem[pc];
           ifid_pc <= pc;

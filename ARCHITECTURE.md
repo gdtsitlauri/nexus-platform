@@ -3,6 +3,9 @@
 Nexus is one repository in layers: a compiler for NexusLang, a family of MIPS execution models from a
 functional interpreter to an out-of-order core, parallel and GPU models, a synthesisable Verilog CPU,
 and stand-alone tools for the theory topics (automata, grammars, types, polyhedra, arithmetic).
+Version 2.0.0 adds logic-design and VLSI/EDA libraries, operating-system algorithms, and a system on
+chip around the Verilog CPU. All layers form one flow, from a NexusLang program to the FPGA bitstream
+and to the kernel on the hardware; `docs/FLOW.md` follows it step by step.
 
 ```mermaid
 flowchart LR
@@ -19,6 +22,9 @@ flowchart LR
   I --> L[parallel: coherence, consistency, NoC, manycore]
   I --> M[SIMT GPU model]
   I --> N[MIPS32 encoder] --> O[Verilog 5-stage pipeline]
+  O --> P[SoC: UART, timer IRQ, GPIO] --> Q[gate-level netlist / ECP5 bitstream]
+  R[logic: QM, BDD, SAT, FSM] --> S[vlsi: AIG, mapping, STA, placement, routing]
+  T[Yosys BLIF] --> S
 ```
 
 ## Source Layout
@@ -42,7 +48,11 @@ flowchart LR
 | `src/sim/advanced` | trace-driven in-order, VLIW-lite, scoreboard and Tomasulo/ROB/SMT schedulers |
 | `src/sim/parallel` | multicore with coherence, consistency, synchronisation and interconnects |
 | `src/sim/simt` | warp-based SIMT GPU model |
-| `src/hdl` | Verilog ALU, adder, multiplier, divider, register file, control, pipeline registers, CPU slice, pipelined CPU |
+| `src/hdl` | Verilog ALU, adder, multiplier, divider, register file, control, pipeline registers, CPU slice, pipelined CPU, logic-design blocks, SoC |
+| `src/logic` | Boolean functions, Quine-McCluskey/Petrick, K-maps, BDDs, CDCL SAT, codes, FSMs, gate-level simulation |
+| `src/vlsi` | switch-level CMOS, layout and DRC, logical effort, AIGs, technology mapping, timing, power, faults, partitioning, floorplanning, placement, routing |
+| `src/os` | scheduling, concurrency model checking and primitives, deadlock, memory management, disks, RAID, file system |
+| `src/embedded` | real-time scheduling, synchronous dataflow, Petri nets |
 | `benchmarks/` | OpenMP, MPI, SIMD and optional CUDA programs |
 
 ## Design Rules
@@ -51,6 +61,6 @@ flowchart LR
   RTL co-simulation enforce this on every test program;
 - theory tools are executable and checked against an independent reference (`std::regex`, host FPU,
   closed-form results, execution of original vs transformed loop nests);
-- optional toolchains (OpenMP, MPI, CUDA, clang, Icarus Verilog, Yosys) never break the build; their
+- optional toolchains (OpenMP, MPI, CUDA, clang, Icarus Verilog, Yosys, nextpnr, POSIX) never break the build; their
   tests are skipped or not registered when the tool is missing;
 - HDL is plain Verilog-2005/SystemVerilog-2012 that Icarus Verilog simulates and Yosys synthesises.

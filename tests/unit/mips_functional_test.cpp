@@ -12,7 +12,8 @@ nexus::sim::functional::RunResult run_text(const std::string& assembly) {
     return nexus::sim::functional::RunResult{
         .success = false,
         .error = parsed.diagnostics.empty() ? "loader failed" : parsed.diagnostics.front(),
-        .trace_lines = {}};
+        .trace_lines = {},
+        .console_bytes = {}};
   }
   return nexus::sim::functional::run_program(*parsed.program);
 }

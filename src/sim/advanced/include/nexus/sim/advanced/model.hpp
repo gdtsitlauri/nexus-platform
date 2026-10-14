@@ -65,6 +65,7 @@ struct RunResult {
   std::vector<std::int32_t> thread_exit_codes;
   std::vector<std::string> trace_lines;
   std::array<std::int32_t, 32> registers{};
+  std::vector<std::int32_t> console_bytes;  // words stored to the console/UART data register (0x10000)
 };
 
 RunResult run_program(const mips::loader::LoadedProgram& program, const RunOptions& options = {});

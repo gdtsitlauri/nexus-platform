@@ -60,6 +60,10 @@ std::int32_t& reg(MachineState& state, Register reg_name) {
 
 std::uint32_t as_u32(std::int32_t value) { return static_cast<std::uint32_t>(value); }
 
+// the console/UART registers of the NEXUS memory map: same addresses in every model and in the SoC
+constexpr std::int32_t kConsoleData = 0x00010000;
+constexpr std::int32_t kConsoleStatus = 0x00010004;
+
 std::int32_t& checked_word_at(MachineState& state, std::int32_t address, std::string& error) {
   static std::int32_t dummy = 0;
   if (address < 0 || (address % 4) != 0) {
@@ -446,6 +450,10 @@ std::vector<DynamicInstruction> execute_trace(
       case Opcode::Lw: {
         const std::int32_t address = reg(state, instruction.rs) + instruction.immediate;
         dynamic.memory_address = address;
+        if (address == kConsoleStatus) {
+          reg(state, instruction.rt) = 1;  // console always ready
+          break;
+        }
         reg(state, instruction.rt) = checked_word_at(state, address, error);
         if (!error.empty()) {
           result.error = error;
@@ -457,6 +465,10 @@ std::vector<DynamicInstruction> execute_trace(
       case Opcode::Sw: {
         const std::int32_t address = reg(state, instruction.rs) + instruction.immediate;
         dynamic.memory_address = address;
+        if (address == kConsoleData) {
+          result.console_bytes.push_back(reg(state, instruction.rt));
+          break;
+        }
         checked_word_at(state, address, error) = reg(state, instruction.rt);
         if (!error.empty()) {
           result.error = error;

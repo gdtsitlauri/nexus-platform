@@ -1,0 +1,16 @@
+# Traffic light controller (Moore). Input: car waiting on the side road. Outputs: main green, side green.
+# States G1/G2 are an equivalent pair (two copies of the main-green state) that minimisation merges.
+fsm traffic moore inputs=1 outputs=2 reset=G1
+G1 / 10
+G2 / 10
+Y1 / 00
+S1 / 01
+Y2 / 00
+G1 0 -> G2
+G1 1 -> Y1
+G2 0 -> G1
+G2 1 -> Y1
+Y1 - -> S1
+S1 0 -> Y2
+S1 1 -> S1
+Y2 - -> G1

@@ -2,17 +2,32 @@
 
 ## Snapshot
 
-- Version: 1.0.0 (2026-10-05)
-- Scope: every topic of the six course outlines in `docs/course_outlines/` is implemented as code
+- Version: 2.0.0 (2026-10-14); 1.0.0 was released on 2026-10-05
+- Scope: every topic of the ten course outlines in `docs/course_outlines/` is implemented as code
   with an automated test, except three reading/history topics (see
   `docs/reports/full_syllabus_checklist.md`)
 - Build: CMake + Ninja, C++20; verified with Clang 22 (zig toolchain) on Windows 11
-- Tests: 65 CTest tests, 64 passed and 1 skipped (`nexus_toolchain_compare` needs `clang` in PATH);
-  the OpenMP and MPI benchmark tests are not registered when those toolchains are absent
+- Tests: 78 CTest tests on Windows with Icarus Verilog, Yosys and nextpnr installed; skipped there:
+  `nexus_toolchain_compare` (needs `clang`) and `nexus_posix_lab` (needs a POSIX system); the OpenMP
+  and MPI benchmark tests are not registered when those toolchains are absent
 - Colab (Tesla T4, CUDA 13.0, GCC 13.3, OpenMPI, Yosys): 68 CTest tests including OpenMP, MPI, the
   bench wrapper and the CUDA demo; 66 passed, 1 skipped (clang), 1 failed (type printing, fixed below and
-  re-verified with Clang; not yet re-run on Colab) (`results/colab/`)
-- HDL: Icarus Verilog for the 9 testbench suites and the RTL co-simulation, Yosys for synthesis
+  re-verified with Clang) (`results/colab/`)
+- Colab, version 2.0.0 (Linux, GCC, no GPU): 81 CTest tests, 79 passed, 2 skipped (clang, nextpnr),
+  including the full flow, the POSIX lab, OpenMP, MPI and the type-inference fix
+  (`results/colab/linux_gcc_2.0.0.md`)
+- HDL: Icarus Verilog for the testbench suites, the RTL co-simulation and the SoC; Yosys for synthesis
+  and equivalence proofs; nextpnr-ecp5 and ecppack for the FPGA flow
+
+## What 2.0.0 Added Over 1.0.0
+
+| area | addition | test |
+| --- | --- | --- |
+| the flow | one NexusLang program through compiler, all CPU models, SoC RTL, gate level and FPGA; control unit through the chip-design tools; kernel against the scheduling library | `nexus_full_flow` |
+| EY121 logic design | minimisation, BDD, SAT, codes, gate-level latches, FSM minimisation/analysis/synthesis, Verilog blocks | `nexus_logic_test`, `nexus_eda_cli`, `nexus_hdl_logic_comb`, `nexus_hdl_logic_seq` |
+| NEY705 VLSI | switch-level CMOS, layout and DRC, logical effort, mapping, STA, power, ATPG, partitioning, floorplanning, placement, routing | `nexus_vlsi_test`, `nexus_eda_cli` |
+| EY517 operating systems | schedulers, model checker, deadlock, memory management, disks, file system, kernel on the CPU, POSIX lab | `nexus_os_test`, `nexus_os_cli`, `nexus_posix_lab` |
+| NEY604 embedded systems | SoC with UART, timer interrupts and GPIO; cross-level checks; ECP5 bitstream; real-time scheduling, SDF, Petri nets | `nexus_soc_levels`, `nexus_soc_fpga`, `nexus_embedded_test`, `nexus_embedded_rt_cli` |
 
 ## What 1.0.0 Added Over 0.11
 
@@ -48,7 +63,10 @@ program on the cached pipeline).
 
 - the simulators are educational models: the Tomasulo core is trace-driven, the SIMT model has no
   thread blocks or shared memory, and cycle counts are model metrics, not hardware measurements;
-- the HDL core is verified in simulation and synthesised generically, not placed and routed on an FPGA;
+- the HDL core and SoC are verified in simulation (RTL and gate level) and placed and routed on an
+  ECP5 at 6.8 MHz (single-cycle divider); no board pin constraints and no board test;
+- the VLSI tools are teaching-scale (global routing only, no GDSII, delays in logical-effort units);
+- the POSIX lab programs run only on a POSIX system (they passed on Colab Linux, not on the Windows host);
 - NexusLang has `int`, `bool` and arrays only (no floating point, pointers or globals);
 - OpenMP, MPI and CUDA demos need their toolchains; they were run on Colab, not on the Windows host.
 

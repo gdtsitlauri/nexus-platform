@@ -1,0 +1,26 @@
+# Peterson's algorithm for two threads, two passes each: mutual exclusion and no deadlock.
+shared flag0=0 flag1=0 turn=0
+thread P0
+  set %i 0
+L: set flag0 1
+  set turn 1
+W: jeq flag1 0 C
+  jeq turn 0 C
+  jmp W
+C: cs
+  endcs
+  set flag0 0
+  add %i 1
+  jne %i 2 L
+thread P1
+  set %i 0
+L: set flag1 1
+  set turn 0
+W: jeq flag0 0 C
+  jeq turn 1 C
+  jmp W
+C: cs
+  endcs
+  set flag1 0
+  add %i 1
+  jne %i 2 L

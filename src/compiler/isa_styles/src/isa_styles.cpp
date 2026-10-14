@@ -1409,6 +1409,20 @@ std::string_view isa_style_name(IsaStyle style) {
 StyleResult compile_and_run(const ir::Module& module, IsaStyle style) {
   StyleResult result;
   result.program.style = style;
+  for (const auto& function : module.functions) {
+    for (const auto& block : function.blocks) {
+      for (const auto& instruction : block.instructions) {
+        if (instruction.kind != ir::InstructionKind::Call) continue;
+        const bool defined = std::any_of(module.functions.begin(), module.functions.end(),
+                                         [&](const ir::Function& f) { return f.name == instruction.callee; });
+        if (!defined) {
+          result.run.error = "call to '" + instruction.callee +
+                             "': console I/O (built-in putc) is supported only by the MIPS back end";
+          return result;
+        }
+      }
+    }
+  }
   Emitter emitter(module, style);
   emitter.emit_all();
   result.program.listing = emitter.listing_;

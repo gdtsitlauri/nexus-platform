@@ -1,0 +1,6 @@
+# Stallings' scheduling example: name arrival service [priority]
+A 0 3 2
+B 2 6 1
+C 4 4 3
+D 6 5 1
+E 8 2 2

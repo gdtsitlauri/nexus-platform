@@ -52,7 +52,7 @@ def check_reports(root: Path) -> None:
                 require(any(test.startswith(name[:-1]) for test in tests), f"no test matches {name}")
             else:
                 require(name in tests, f"checklist cites unknown test {name}")
-    require(rows >= 70, f"checklist has too few rows ({rows})")
+    require(rows >= 130, f"checklist has too few rows ({rows})")
     require("still outside" not in checklist.lower(), "a topic is still marked as outside the project")
 
     for relative in (
@@ -72,10 +72,10 @@ def check_final(root: Path) -> None:
     architecture = read(root / "ARCHITECTURE.md")
     changelog = read(root / "CHANGELOG.md")
 
-    require("1.0.0" in status, "STATUS.md does not reflect version 1.0.0")
-    require("1.0.0" in readme, "README.md missing version 1.0.0")
+    require("2.0.0" in status, "STATUS.md does not reflect version 2.0.0")
+    require("2.0.0" in readme, "README.md missing version 2.0.0")
     require("HDL" in architecture, "ARCHITECTURE.md missing HDL coverage")
-    require("[1.0.0]" in changelog, "CHANGELOG.md missing the 1.0.0 entry")
+    require("[2.0.0]" in changelog, "CHANGELOG.md missing the 2.0.0 entry")
 
     for relative in (
         "README_GR.md",
@@ -96,6 +96,19 @@ def check_final(root: Path) -> None:
         "docs/course_outlines/NEY613_compilers.pdf",
         "docs/course_outlines/NEY709_advanced_compiler_topics.pdf",
         "docs/course_outlines/NEY704_parallel_systems_and_programming.pdf",
+        "docs/course_outlines/EY121_logic_design.pdf",
+        "docs/course_outlines/EY517_operating_systems.pdf",
+        "docs/course_outlines/NEY604_embedded_systems_and_microprocessors.pdf",
+        "docs/course_outlines/NEY705_vlsi_design.pdf",
+        "src/hdl/soc/nexus_soc.v",
+        "src/hdl/soc/nexus_soc_fpga.v",
+        "docs/logic/logic_design.md",
+        "docs/vlsi/vlsi_flow.md",
+        "docs/os/operating_systems.md",
+        "docs/embedded/embedded_soc.md",
+        "docs/FLOW.md",
+        "examples/flow/flow_demo.nx",
+        "scripts/nexus_flow.py",
     ):
         require((root / relative).exists(), f"missing final artifact: {relative}")
 

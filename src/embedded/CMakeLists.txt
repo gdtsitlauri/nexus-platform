@@ -1,0 +1,5 @@
+add_library(nexus_embedded STATIC src/models.cpp)
+target_include_directories(nexus_embedded PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+nexus_apply_project_options(nexus_embedded)
+nexus_set_warnings(nexus_embedded)
+nexus_enable_sanitizers(nexus_embedded)

@@ -683,6 +683,8 @@ LoweringResult lower_program(const Program& program) {
     function_signatures.insert_or_assign(
         function.name, FunctionSignature{.return_type = convert_type(function.return_type)});
   }
+  // built-in putc (see the semantic analyser); a program may define its own
+  function_signatures.try_emplace("putc", FunctionSignature{.return_type = Type{.base = BaseTypeKind::Int, .array_extents = {}}});
 
   auto module = std::make_unique<Module>();
   std::vector<Diagnostic> diagnostics;

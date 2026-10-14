@@ -2,14 +2,14 @@ cmake_minimum_required(VERSION 3.25)
 
 project(
   Nexus
-  VERSION 1.0.0
+  VERSION 2.0.0
   DESCRIPTION "Nexus educational systems and compiler platform"
   LANGUAGES CXX)
 
-set(NEXUS_VERSION_LABEL "1.0.0" CACHE STRING "Human-readable project version label" FORCE)
+set(NEXUS_VERSION_LABEL "2.0.0" CACHE STRING "Human-readable project version label" FORCE)
 set(
   NEXUS_PHASE_LABEL
-  "1.0 - complete course coverage"
+  "2.0 - ten-course coverage"
   CACHE STRING "Current project phase" FORCE)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

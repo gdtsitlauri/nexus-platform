@@ -169,6 +169,12 @@ class Analyzer {
               .span = function.span,
           });
     }
+    // built-in console output: writes one character to the UART at 0x10000 (the NEXUS memory map)
+    if (!functions_.contains("putc")) {
+      functions_.emplace("putc", FunctionInfo{.return_type = Type{.base = BuiltinTypeKind::Int, .array_extents = {}},
+                                              .parameter_types = {Type{.base = BuiltinTypeKind::Int, .array_extents = {}}},
+                                              .span = {}});
+    }
   }
 
   void analyze_function(const FunctionDecl& function) {

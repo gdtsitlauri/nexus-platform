@@ -1,0 +1,4 @@
+# periodic tasks: name wcet period [deadline]; U = 0.833 > Liu-Layland bound, yet RM-schedulable
+t1 1 4
+t2 2 6
+t3 3 12

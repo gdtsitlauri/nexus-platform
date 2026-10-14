@@ -26,6 +26,9 @@ struct State {
 
 constexpr std::int32_t kHaltReturnAddress = std::numeric_limits<std::int32_t>::min();
 constexpr std::size_t kStackGuardWords = 16;
+// the console/UART registers of the NEXUS memory map: same addresses in the pipeline model and the SoC
+constexpr std::int32_t kConsoleData = 0x00010000;
+constexpr std::int32_t kConsoleStatus = 0x00010004;
 
 std::int32_t& reg(State& state, Register reg) {
   return state.regs[mips::isa::register_index(reg)];
@@ -135,6 +138,10 @@ RunResult run_program(const LoadedProgram& program, const RunOptions& options) {
         break;
       case Opcode::Lw: {
         const std::int32_t address = reg(state, instruction.rs) + instruction.immediate;
+        if (address == kConsoleStatus) {
+          reg(state, instruction.rt) = 1;  // the ISA-level console is always ready
+          break;
+        }
         reg(state, instruction.rt) = checked_word_at(state, address, error);
         if (!error.empty()) {
           result.error = error;
@@ -145,6 +152,10 @@ RunResult run_program(const LoadedProgram& program, const RunOptions& options) {
       }
       case Opcode::Sw: {
         const std::int32_t address = reg(state, instruction.rs) + instruction.immediate;
+        if (address == kConsoleData) {
+          result.console_bytes.push_back(reg(state, instruction.rt));
+          break;
+        }
         checked_word_at(state, address, error) = reg(state, instruction.rt);
         if (!error.empty()) {
           result.error = error;
