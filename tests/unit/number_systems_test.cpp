@@ -133,8 +133,8 @@ void unicode() {
   expect(!common::utf8_decode(std::string("\xC0\xAF"), error).has_value(), "overlong '/' is rejected");
   expect(!common::utf8_decode(std::string("\xE2\x82"), error).has_value(), "truncated sequence is rejected");
   expect(!common::utf8_decode(std::string("\xED\xA0\x80"), error).has_value(), "encoded surrogate is rejected");
-  const auto greek = common::utf8_decode("\xCE\x9D\xCE\xB5\xCE\xBE", error);  // "Νεξ"
-  expect(greek && greek->size() == 3 && greek->front() == 0x039D, "Greek text decodes to code points");
+  const auto text = common::utf8_decode("\xC3\x91\xC3\xA9\xC3\xBC", error);  // "Ñéü": three two-byte sequences
+  expect(text && text->size() == 3 && text->front() == 0x00D1, "two-byte sequences decode to code points");
 }
 
 }  // namespace
