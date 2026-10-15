@@ -214,5 +214,5 @@ extensions:
 
 ## Citation and license
 
-George David Tsitlauri, University of Thessaly. MIT license ([LICENSE](LICENSE)); citation metadata in
+George David Tsitlauri, Department of Informatics and Telecommunications, University of Thessaly. MIT license ([LICENSE](LICENSE)); citation metadata in
 [CITATION.cff](CITATION.cff).
