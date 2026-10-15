@@ -6,7 +6,7 @@ version: 2.0.0
 authors:
   - given-names: "George David"
     family-names: "Tsitlauri"
-    affiliation: "Department of Informatics and Telecommunications, University of Thessaly, Lamia, Greece"
+    affiliation: "Department of Informatics and Telecommunications, University of Thessaly, Greece"
 date-released: 2026-10-14
 license: MIT
 repository-code: "https://github.com/gdtsitlauri/nexus-platform"
