@@ -214,5 +214,5 @@ extensions:
 
 ## Citation and license
 
-George David Tsitlauri, University of Thessaly, 2026. MIT License (`LICENSE`); citation metadata in
-`CITATION.cff`.
+George David Tsitlauri, University of Thessaly. MIT license ([LICENSE](LICENSE)); citation metadata in
+[CITATION.cff](CITATION.cff).
