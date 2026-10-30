@@ -22,5 +22,15 @@ jobs:
         env:
           OMPI_MCA_rmaps_base_oversubscribe: "1"
         run: ctest --test-dir build --output-on-failure -j2
+      - name: Report failed tests
+        if: failure()
+        env:
+          OMPI_MCA_rmaps_base_oversubscribe: "1"
+        run: |
+          for name in $(cut -d: -f2 build/Testing/Temporary/LastTestsFailed.log); do
+            detail=$(ctest --test-dir build -R "^${name}\$" --output-on-failure 2>&1 | grep -v '^\s*$' | tail -12 | tr '\n' ' ' | cut -c1-900)
+            echo "::error title=${name}::${detail}"
+          done
       - name: LLVM pass (NEY709)
+        if: always()
         run: ctest --test-dir build -R nexus_llvm_pass -V
