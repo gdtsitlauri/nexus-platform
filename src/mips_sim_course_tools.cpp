@@ -1,4 +1,5 @@
-// mips-sim commands for the vector processor and the multithreaded cores (NEY704).
+// mips-sim commands for trace-driven studies: vector processor and multithreading (NEY704), virtual memory
+// (EY321), non-blocking caches and prefetching (NEY606).
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -8,6 +9,9 @@
 
 #include "nexus/mips/loader/parser.hpp"
 #include "nexus/sim/advanced/multithreading.hpp"
+#include "nexus/sim/functional/interpreter.hpp"
+#include "nexus/sim/memory/nonblocking_cache.hpp"
+#include "nexus/sim/memory/virtual_memory.hpp"
 #include "nexus/sim/vector/model.hpp"
 
 int run_vector(int argc, char** argv) {
@@ -128,5 +132,103 @@ int run_multithreading(int argc, char** argv) {
               << " instructions, " << result.threads[t].misses << " misses, finished at cycle "
               << result.threads[t].finish_cycle << '\n';
   }
+  return 0;
+}
+
+namespace {
+
+// Runs a MIPS program functionally and returns its executed instructions with load/store addresses.
+bool record(const char* path, std::vector<nexus::sim::functional::Event>& events) {
+  const auto loaded = nexus::mips::loader::load_program_from_file(path);
+  if (!loaded.program) {
+    std::cerr << "error: cannot load " << path << '\n';
+    return false;
+  }
+  nexus::sim::functional::RunOptions options;
+  options.record_events = true;
+  options.max_instructions = 5'000'000;
+  auto run = nexus::sim::functional::run_program(*loaded.program, options);
+  if (!run.success) {
+    std::cerr << "error: " << run.error << '\n';
+    return false;
+  }
+  events = std::move(run.events);
+  return true;
+}
+
+}  // namespace
+
+// Virtual memory (EY321): mips-sim vm <prog.s> [--page B] [--frames F] [--tlb T] [--policy fifo|lru|clock|opt]
+int run_virtual_memory(int argc, char** argv) {
+  namespace mem = nexus::sim::memory;
+  if (argc < 3) {
+    std::cerr << "usage: mips-sim vm <prog.s> [--page B] [--frames F] [--tlb T] [--policy fifo|lru|clock|opt]\n";
+    return 1;
+  }
+  mem::VmConfig config;
+  for (int i = 3; i + 1 < argc; i += 2) {
+    const std::string arg = argv[i];
+    const std::string value = argv[i + 1];
+    if (arg == "--page") config.page_bytes = std::stoul(value);
+    else if (arg == "--frames") config.frames = std::stoul(value);
+    else if (arg == "--tlb") config.tlb_entries = std::stoul(value);
+    else if (arg == "--policy") {
+      config.policy = value == "fifo" ? mem::PagePolicy::Fifo : value == "clock" ? mem::PagePolicy::Clock
+                    : value == "opt" ? mem::PagePolicy::Opt : mem::PagePolicy::Lru;
+    }
+  }
+  std::vector<nexus::sim::functional::Event> events;
+  if (!record(argv[2], events)) {
+    return 1;
+  }
+  std::vector<mem::VmAccess> trace;
+  for (const auto& e : events) {
+    if (e.address >= 0) {
+      trace.push_back({static_cast<std::uint64_t>(e.address), e.opcode == nexus::mips::isa::Opcode::Sw});
+    }
+  }
+  const auto s = mem::simulate_virtual_memory(trace, config);
+  std::cout << "virtual memory: pages of " << config.page_bytes << " bytes, " << config.frames << " frames, "
+            << config.tlb_entries << "-entry TLB, " << mem::page_policy_name(config.policy) << " replacement\n";
+  std::cout << s.accesses << " accesses to " << s.distinct_pages << " pages: TLB " << s.tlb_hits << " hits / "
+            << s.tlb_misses << " misses, " << s.page_faults << " page faults, " << s.write_backs
+            << " dirty pages written back; average access " << std::fixed << std::setprecision(2)
+            << s.average_access_cycles() << " cycles\n";
+  return 0;
+}
+
+// Non-blocking caches and prefetching (NEY606): mips-sim cache <prog.s> [--mshr K] [--prefetch none|next|stride]
+int run_cache_study(int argc, char** argv) {
+  namespace mem = nexus::sim::memory;
+  if (argc < 3) {
+    std::cerr << "usage: mips-sim cache <prog.s> [--mshr K] [--prefetch none|next|stride] [--penalty P] [--line B]\n";
+    return 1;
+  }
+  mem::NbConfig config;
+  for (int i = 3; i + 1 < argc; i += 2) {
+    const std::string arg = argv[i];
+    const std::string value = argv[i + 1];
+    if (arg == "--mshr") config.mshrs = std::stoul(value);
+    else if (arg == "--penalty") config.miss_penalty = std::stoul(value);
+    else if (arg == "--line") config.line_bytes = std::stoul(value);
+    else if (arg == "--prefetch") {
+      config.prefetcher = value == "next" ? mem::Prefetcher::NextLine : value == "stride" ? mem::Prefetcher::Stride
+                                                                                          : mem::Prefetcher::None;
+    }
+  }
+  std::vector<nexus::sim::functional::Event> events;
+  if (!record(argv[2], events)) {
+    return 1;
+  }
+  std::vector<mem::CacheTraceEntry> trace;
+  for (const auto& e : events) {
+    trace.push_back({e.pc, e.address});
+  }
+  const auto s = mem::simulate_nonblocking_cache(trace, config);
+  std::cout << (config.mshrs == 0 ? std::string("blocking cache") : std::to_string(config.mshrs) + " MSHRs")
+            << ", prefetcher " << mem::prefetcher_name(config.prefetcher) << ", miss penalty " << config.miss_penalty << '\n';
+  std::cout << s.instructions << " instructions, " << s.accesses << " accesses: " << s.hits << " hits, " << s.misses
+            << " misses, " << s.merged << " merged into lines in flight; " << s.prefetches << " prefetches ("
+            << s.useful_prefetches << " useful); " << s.cycles << " cycles, " << s.stall_cycles << " stall cycles\n";
   return 0;
 }

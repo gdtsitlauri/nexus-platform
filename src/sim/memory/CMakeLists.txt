@@ -1,7 +1,9 @@
 add_library(
   nexus_sim_memory
   STATIC
-    src/system.cpp)
+    src/system.cpp
+    src/virtual_memory.cpp
+    src/nonblocking_cache.cpp)
 
 add_library(Nexus::sim_memory ALIAS nexus_sim_memory)
 

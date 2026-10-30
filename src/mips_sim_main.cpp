@@ -32,6 +32,8 @@ void print_usage(std::ostream& stream) {
          << "  mips-sim encode <file> [-o image.hex]\n"
          << "  mips-sim vector <file.vasm> [--n N] [--mvl M] [--lanes L] [--no-chaining] [--trace]\n"
          << "  mips-sim mt <single|coarse|fine|smt> <thread.s>... [--width W] [--miss M] [--switch S]\n"
+         << "  mips-sim vm <prog.s> [--page B] [--frames F] [--tlb T] [--policy fifo|lru|clock|opt]\n"
+         << "  mips-sim cache <prog.s> [--mshr K] [--prefetch none|next|stride] [--penalty P] [--line B]\n"
          << "  mips-sim arith float <a> add|sub|mul|div <b>\n"
          << "  mips-sim arith repr <integer> [bits]\n"
          << "  mips-sim arith booth <a> <b> [bits]\n"
@@ -358,6 +360,8 @@ std::string format_hierarchy_name(
 
 int run_vector(int argc, char** argv);  // mips_sim_course_tools.cpp
 int run_multithreading(int argc, char** argv);  // mips_sim_course_tools.cpp
+int run_virtual_memory(int argc, char** argv);  // mips_sim_course_tools.cpp
+int run_cache_study(int argc, char** argv);  // mips_sim_course_tools.cpp
 
 int main(int argc, char** argv) {
   if (argc == 1) {
@@ -374,6 +378,14 @@ int main(int argc, char** argv) {
 
   if (command == "arith") {
     return run_arith(argc, argv);
+  }
+
+  if (command == "vm") {
+    return run_virtual_memory(argc, argv);
+  }
+
+  if (command == "cache") {
+    return run_cache_study(argc, argv);
   }
 
   if (command == "mt") {
