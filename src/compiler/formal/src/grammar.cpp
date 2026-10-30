@@ -300,7 +300,7 @@ GrammarResult parse_grammar(const std::string& text) {
         rule.alternatives.back().action = word.text;
         continue;
       }
-      if (!word.quoted && (word.text == "%empty" || word.text == "ε")) {
+      if (!word.quoted && (word.text == "%empty" || word.text == "\xCE\xB5")) {
         continue;
       }
       rule.alternatives.back().symbols.push_back(word);

@@ -1,0 +1,11 @@
+// SCCP can prove the else block unreachable within main itself.
+fn main() -> int {
+  var flag: bool = true;
+  var y: int = 0;
+  if (flag) {
+    y = 2;
+  } else {
+    y = 3;
+  }
+  return y + 1;
+}

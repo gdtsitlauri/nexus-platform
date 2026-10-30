@@ -1,4 +1,5 @@
-# Three pipeline hazards in a few lines (EY321).
+# Forwarding and a load-use stall (EY321). The branch is not taken: no flush.
+# See examples/basics/mips/09_flush.s for a taken branch and wrong-path flush.
 main:
   addiu $t0, $zero, 5      # t0 = 5
   addu  $t1, $t0, $t0      # needs t0 one cycle later: forwarding (EX -> EX), no stall

@@ -151,7 +151,7 @@ equality        = comparison { ( "==" | "!=" ) comparison } ;
 comparison      = additive { ( "<" | "<=" | ">" | ">=" ) additive } ;
 additive        = multiplicative { ( "+" | "-" ) multiplicative } ;
 multiplicative  = unary { ( "*" | "/" | "%" ) unary } ;
-unary           = [ "!" | "-" ] unary | postfix ;
+unary           = "!" unary | "-" unary | postfix ;
 postfix         = primary { call_suffix | index_suffix } ;
 call_suffix     = "(" [ argument_list ] ")" ;
 argument_list   = expression { "," expression } ;

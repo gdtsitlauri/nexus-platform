@@ -1,0 +1,10 @@
+// One question throughout the six courses: what does 1 + ... + 8 mean to a computer?
+fn main() -> int {
+  var i: int = 1;
+  var total: int = 0;
+  while (i < 9) {
+    total = total + i;
+    i = i + 1;
+  }
+  return total;  // 36
+}

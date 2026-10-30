@@ -4,6 +4,7 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "nexus/common/banner.hpp"
@@ -70,6 +71,7 @@ void print_usage(std::ostream& stream) {
          << "  nexusc opt <file> --pass unroll-remainder [--factor K]\n"
          << "  nexusc compile <file> -S [-o out.s]\n"
          << "  nexusc compile <file> -S --regalloc none|linear-scan [-o out.s]\n"
+         << "  nexusc compile <file> -S --pass cse|unroll [--regalloc linear-scan] [-o out.s]\n"
          << "  nexusc compile <file> --emit-ir\n"
          << "  nexusc isa <file> [--style stack|accumulator|register-memory|all] [--listing]\n"
          << "  nexusc regex <pattern> [--nfa] [--match <text>...]\n"
@@ -866,6 +868,7 @@ struct CompileOptions {
   bool emit_ir = false;
   bool emit_assembly = false;
   std::optional<std::string> output_file;
+  std::optional<std::string> pass;
   nexus::compiler::backend_mips::CodegenOptions codegen{};
 };
 
@@ -875,9 +878,29 @@ int run_compile(const LoadedSource& loaded_source, const CompileOptions& options
     return 1;
   }
 
-  const auto module = lower_checked_program(loaded_source, *checked_program->program);
+  auto module = lower_checked_program(loaded_source, *checked_program->program);
   if (!module.has_value()) {
     return 1;
+  }
+
+  // The same existing IR transformation can now feed the backend, rather than only an IR report.
+  if (options.pass == "cse") {
+    auto numbered = nexus::compiler::passes::number_values(*module);
+    *module = std::move(numbered.module);
+    for (const auto& note : numbered.notes) {
+      std::cerr << "; " << note << '\n';
+    }
+  } else if (options.pass == "unroll") {
+    auto unrolled = nexus::compiler::passes::unroll_loops(
+        *module, nexus::compiler::passes::LoopUnrollMode::Concrete);
+    for (const auto& note : unrolled.notes) {
+      std::cerr << "; " << note << '\n';
+    }
+    if (unrolled.transformed_loops == 0) {
+      std::cerr << "error: --pass unroll found no supported fixed counted loop; inspect with nexusc opt\n";
+      return 2;
+    }
+    *module = std::move(unrolled.module);
   }
 
   if (options.emit_ir) {
@@ -1148,6 +1171,23 @@ int main(int argc, char** argv) {
         }
         continue;
       }
+      if (option == "--pass") {
+        if (index + 1 >= argc) {
+          std::cerr << "error: missing pass after --pass\n";
+          return 1;
+        }
+        const std::string pass = argv[++index];
+        if (pass != "cse" && pass != "unroll") {
+          std::cerr << "error: unknown compile pass '" << pass << "', expected 'cse' or 'unroll'\n";
+          return 1;
+        }
+        if (options.pass.has_value()) {
+          std::cerr << "error: compile accepts one --pass at a time\n";
+          return 1;
+        }
+        options.pass = pass;
+        continue;
+      }
       if (option == "-o") {
         if (index + 1 >= argc) {
           std::cerr << "error: missing file name after -o\n";
@@ -1163,7 +1203,7 @@ int main(int argc, char** argv) {
     }
 
     if (options.emit_ir && options.output_file.has_value()) {
-      std::cerr << "error: --emit-ir does not support -o in Phase 4\n";
+      std::cerr << "error: --emit-ir does not support -o\n";
       return 1;
     }
 

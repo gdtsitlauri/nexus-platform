@@ -10,7 +10,7 @@ equality        = comparison { ( "==" | "!=" ) comparison } ;
 comparison      = additive { ( "<" | "<=" | ">" | ">=" ) additive } ;
 additive        = multiplicative { ( "+" | "-" ) multiplicative } ;
 multiplicative  = unary { ( "*" | "/" | "%" ) unary } ;
-unary           = [ "!" | "-" ] unary | primary ;
+unary           = "!" unary | "-" unary | primary ;
 primary         = identifier | integer_literal | "(" expression ")" ;
 ```
 
@@ -22,11 +22,12 @@ primary         = identifier | integer_literal | "(" expression ")" ;
 
 ## LR Discussion
 
-An LR parser could accept a flatter, more ambiguous spelling such as:
+A parser generator can accept a flatter spelling with explicit precedence/associativity rules such as:
 
 ```ebnf
 expr = expr "+" expr | expr "*" expr | "(" expr ")" | identifier | integer_literal ;
 ```
 
-That grammar is concise but harder to interpret by hand. The NEXUS parser chooses the LL-style factoring so
+That grammar is ambiguous as written: an LR table has conflicts unless a policy resolves them.
+Left recursion alone is acceptable to LR; ambiguity is a separate issue. The NEXUS parser chooses LL-style factoring so
 the control flow of the parser is easy to inspect in C++.

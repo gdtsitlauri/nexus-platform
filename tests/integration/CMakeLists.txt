@@ -141,11 +141,37 @@ add_test(
 add_test(
   NAME nexus_full_flow
   COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/nexus_flow.py" "$<TARGET_FILE_DIR:mips_sim>")
-set_tests_properties(nexus_full_flow PROPERTIES SKIP_RETURN_CODE 77)
+add_test(
+  NAME nexus_console_flow
+  COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/nexus_flow.py"
+          "$<TARGET_FILE_DIR:mips_sim>" --console)
+
+add_test(
+  NAME nexus_full_flow_rtl
+  COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/nexus_flow.py"
+          "$<TARGET_FILE_DIR:mips_sim>" --console --require-rtl)
+set_tests_properties(nexus_full_flow_rtl PROPERTIES SKIP_RETURN_CODE 77)
 
 add_test(
   NAME nexus_docs_links
   COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/docs_links_test.py" "${PROJECT_SOURCE_DIR}")
+
+add_test(
+  NAME nexus_teaching_examples
+  COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/teaching_examples_test.py"
+          "$<TARGET_FILE:nexusc>" "$<TARGET_FILE:mips_sim>" "${PROJECT_SOURCE_DIR}")
+
+add_test(
+  NAME nexus_teaching_models
+  COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/teaching_models_test.py")
+
+foreach(lesson_kind IN ITEMS c openmp mpi)
+  add_test(
+    NAME nexus_teaching_${lesson_kind}
+    COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/teaching_examples_test.py"
+            --native "${lesson_kind}" "${PROJECT_SOURCE_DIR}")
+  set_tests_properties(nexus_teaching_${lesson_kind} PROPERTIES SKIP_RETURN_CODE 77)
+endforeach()
 
 if(TARGET NexusPasses)
   find_program(NEXUS_LLVM_CLANG NAMES clang clang-${LLVM_VERSION_MAJOR} HINTS "${LLVM_TOOLS_BINARY_DIR}")

@@ -1,0 +1,14 @@
+// With argument 4 the result is 10 (1+2+3+4); with 5 it would be 15.
+fn sum(n: int) -> int {
+  var i: int = 1;
+  var total: int = 0;
+  while (i <= n) {
+    total = total + i;
+    i = i + 1;
+  }
+  return total;
+}
+
+fn main() -> int {
+  return sum(4);
+}
