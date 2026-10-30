@@ -33,6 +33,7 @@
 #include "nexus/compiler/ir/printer.hpp"
 #include "nexus/compiler/passes/interprocedural_pass.hpp"
 #include "nexus/compiler/polyhedral/polyhedral.hpp"
+#include "nexus/compiler/polyhedral/schedule.hpp"
 #include "nexus/compiler/passes/affine_stripmine.hpp"
 #include "nexus/compiler/passes/loop_unroll.hpp"
 #include "nexus/compiler/semantics/semantic_analyzer.hpp"
@@ -71,7 +72,7 @@ void print_usage(std::ostream& stream) {
          << "  nexusc isa <file> [--style stack|accumulator|register-memory|all] [--listing]\n"
          << "  nexusc regex <pattern> [--nfa] [--match <text>...]\n"
          << "  nexusc infer \"<mini-ML expression>\" [--trace]\n"
-         << "  nexusc poly <file.loop> [interchange a b | reverse k | skew target source factor]...\n"
+         << "  nexusc poly <file.loop> [interchange a b | reverse k | skew target source factor]... | schedule\n"
          << "  nexusc graph <file.graph>          DFS/BFS, edge kinds, topological order, SCCs, Warshall closure\n"
          << "  nexusc tree \"a(b(d e) c)\"          preorder, inorder, postorder, level order\n"
          << "  nexusc hash <word>...                 chained hash table: buckets, rehashes, probes\n"
@@ -711,6 +712,11 @@ int run_poly(int argc, char** argv) {
   const std::size_t depth = nest.indices.size();
   if (argc == 3) {
     return 0;
+  }
+  if (std::string_view(argv[3]) == "schedule") {
+    const auto schedule = poly::find_hyperplane_schedule(nest, analysis);
+    std::cout << poly::print_schedule(nest, schedule);
+    return schedule.found && schedule.applied.verified ? 0 : 2;
   }
   poly::Matrix transform(depth, std::vector<std::int64_t>(depth, 0));
   for (std::size_t index = 0; index < depth; ++index) {

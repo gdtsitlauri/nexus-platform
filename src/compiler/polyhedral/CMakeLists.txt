@@ -1,7 +1,8 @@
 add_library(
   nexus_polyhedral
   STATIC
-    src/polyhedral.cpp)
+    src/polyhedral.cpp
+    src/schedule.cpp)
 
 add_library(Nexus::polyhedral ALIAS nexus_polyhedral)
 
