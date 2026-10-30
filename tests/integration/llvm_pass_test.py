@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """NexusPasses LLVM plugin: strength reduction must remove every power-of-two mul/udiv/urem without changing the
-program's output, and the loop report must find the 100 x 10 nest with its trip counts."""
+program's output, and the loop report must find the 100 x 10 nest (backedge-taken counts 100 and 10)."""
 from __future__ import annotations
 
 import re
@@ -58,8 +58,10 @@ def main() -> int:
         lines = [line for line in report.stderr.splitlines() if line.startswith("nexus-loops: main:")]
         print(report.stderr)
         require(len(lines) == 2, report.stderr)
-        require("depth 1" in lines[0] and "trip count 100" in lines[0], report.stderr)
-        require("depth 2" in lines[1] and "trip count 10" in lines[1], report.stderr)
+        # the loops test their condition at the top, so the header runs 101 (11) times: trip count 101 (11)
+        # and backedge-taken count 100 (10), i.e. 100 (10) iterations of the body
+        require("depth 1" in lines[0] and "backedge-taken count 100" in lines[0], report.stderr)
+        require("depth 2" in lines[1] and "backedge-taken count 10" in lines[1], report.stderr)
     print(f"llvm pass: {len(before)} power-of-two operations reduced, output {outputs[0].strip()} unchanged; loops found")
     return 0
 
