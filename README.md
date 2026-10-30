@@ -14,9 +14,9 @@ that explains the point, shows a picture and a real example, and asks you a few 
 | NEY221 Principles of Computer Operation | [docs/courses/NEY221.md](docs/courses/NEY221.md) | MIPS assembly, instruction set styles, two's complement and IEEE-754, adders, Booth, division |
 | EY321 Computer Organization | [docs/courses/EY321.md](docs/courses/EY321.md) | single-cycle, multi-cycle and pipelined CPUs, hazards, caches, virtual memory, I/O, Verilog |
 | NEY606 Computer Architecture | [docs/courses/NEY606.md](docs/courses/NEY606.md) | Amdahl, superscalar, scoreboard, Tomasulo, branch prediction, VLIW, software pipelining |
-| NEY704 Parallel Systems and Programming | [docs/courses/NEY704.md](docs/courses/NEY704.md) | multithreading, coherence, consistency, OpenMP, MPI, vectors, GPUs, networks |
+| NEY704 Parallel Systems and Programming | [docs/courses/NEY704.md](docs/courses/NEY704.md) | multithreading, coherence (also in Verilog), consistency, OpenMP, MPI, vectors, GPUs, networks |
 | NEY613 Compilers | [docs/courses/NEY613.md](docs/courses/NEY613.md) | automata, lexer, LL and LR parsing, type checking, quadruples, code generation |
-| NEY709 Advanced Compiler Topics | [docs/courses/NEY709.md](docs/courses/NEY709.md) | SSA, data flow, constant propagation, unrolling, polyhedral transformations, tiling |
+| NEY709 Advanced Compiler Topics | [docs/courses/NEY709.md](docs/courses/NEY709.md) | SSA, data flow, constant propagation, common subexpressions, unrolling, polyhedral transformations, tiling, an LLVM pass |
 
 How the guides fit together: [docs/courses/README.md](docs/courses/README.md).
 
@@ -41,7 +41,7 @@ all of these steps and checks that every one prints the same result; [docs/FLOW.
 ## Build it (once)
 
 You need CMake (3.25 or newer), Ninja, a C++20 compiler (a recent gcc or clang), Python 3, Flex and Bison.
-Optional: Icarus Verilog (the Verilog exercises), an OpenMP compiler, MPI, CUDA.
+Optional: Icarus Verilog (the Verilog exercises), an OpenMP compiler, MPI, CUDA, LLVM (the LLVM pass).
 
 ```bash
 # Ubuntu / WSL:  sudo apt install cmake ninja-build g++ python3 flex bison iverilog
@@ -71,7 +71,9 @@ src/compiler/   the compiler: frontend (lexer, parser), semantics, ir, analysis,
                 formal (automata, grammars), types, polyhedral, isa_styles
 src/sim/        the processors: functional, single_cycle, multi_cycle, pipeline, memory, io,
                 advanced (scoreboard, Tomasulo), parallel (multicore, messages, networks), vector, simt (GPU)
-src/hdl/        Verilog: ALU, register file, control unit, multi-cycle and pipelined MIPS CPUs (+ testbenches)
+src/hdl/        Verilog: ALU, register file, control unit, multi-cycle and pipelined MIPS CPUs, a 4-core MSI
+                memory system (+ testbenches)
+src/llvm_pass/  two passes for the LLVM compiler (built on Linux/macOS when LLVM is installed)
 src/common/     computer arithmetic: number systems, IEEE-754, adders, multipliers, dividers
 benchmarks/     OpenMP, MPI, SIMD and CUDA programs
 examples/       small inputs used by the guides (programs, grammars, loops, assembly, GPU kernels)

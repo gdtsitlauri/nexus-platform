@@ -461,3 +461,21 @@ nexus_apply_project_options(nexus_region_flow_test)
 nexus_set_warnings(nexus_region_flow_test)
 nexus_enable_sanitizers(nexus_region_flow_test)
 add_test(NAME nexus_region_flow_test COMMAND $<TARGET_FILE:nexus_region_flow_test> "${PROJECT_SOURCE_DIR}")
+
+add_executable(nexus_expression_opt_test expression_opt_test.cpp)
+target_link_libraries(
+  nexus_expression_opt_test
+  PRIVATE
+    nexus_frontend
+    nexus_semantics
+    nexus_ir
+    nexus_analysis
+    nexus_passes
+    nexus_backend_mips
+    nexus_mips_assembler
+    nexus_mips_loader
+    nexus_sim_functional)
+nexus_apply_project_options(nexus_expression_opt_test)
+nexus_set_warnings(nexus_expression_opt_test)
+nexus_enable_sanitizers(nexus_expression_opt_test)
+add_test(NAME nexus_expression_opt_test COMMAND $<TARGET_FILE:nexus_expression_opt_test> "${PROJECT_SOURCE_DIR}")

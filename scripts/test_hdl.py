@@ -21,6 +21,7 @@ SUITES: dict[str, list[str]] = {
     "register-file": ["register_file/nexus_register_file.v", "register_file/register_file_tb.v"],
     "control": ["control/nexus_control_unit.v", "control/control_unit_tb.v"],
     "pipeline-reg": ["pipeline_regs/nexus_pipeline_reg.v", "pipeline_regs/pipeline_reg_tb.v"],
+    "msi": ["multicore/nexus_msi_system.v", "multicore/msi_system_tb.v"],
     "cpu-slice": [
         "alu/nexus_adder.v",
         "alu/nexus_alu.v",

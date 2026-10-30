@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <functional>
 #include <map>
+#include <optional>
 #include <queue>
 #include <set>
 #include <sstream>
@@ -412,6 +413,242 @@ std::string print_region_analysis(const ir::Function& function, const ControlFlo
   output << "region solver: " << solution.compositions << " compositions, " << solution.meets << " meets, "
          << solution.closures << " closures, no iteration; iterative solver (" << iterative.iterations
          << " passes) " << (agree ? "agrees" : "DISAGREES") << '\n';
+  return output.str();
+}
+
+namespace {
+
+std::string operator_text(ir::BinaryOp op) {
+  switch (op) {
+    case ir::BinaryOp::Add: return "+";
+    case ir::BinaryOp::Sub: return "-";
+    case ir::BinaryOp::Mul: return "*";
+    case ir::BinaryOp::Div: return "/";
+    case ir::BinaryOp::Mod: return "%";
+    case ir::BinaryOp::Less: return "<";
+    case ir::BinaryOp::LessEqual: return "<=";
+    case ir::BinaryOp::Greater: return ">";
+    case ir::BinaryOp::GreaterEqual: return ">=";
+    case ir::BinaryOp::Equal: return "==";
+    case ir::BinaryOp::NotEqual: return "!=";
+    case ir::BinaryOp::LogicalAnd: return "&&";
+    case ir::BinaryOp::LogicalOr: return "||";
+  }
+  return "?";
+}
+
+bool is_commutative(ir::BinaryOp op) {
+  return op == ir::BinaryOp::Add || op == ir::BinaryOp::Mul || op == ir::BinaryOp::Equal ||
+         op == ir::BinaryOp::NotEqual || op == ir::BinaryOp::LogicalAnd || op == ir::BinaryOp::LogicalOr;
+}
+
+struct Described {
+  std::string text;
+  std::set<ir::LocalId> locals;
+  bool compound = false;
+};
+
+// Walks one block and reports, in order, every binary expression it computes (with the locals it reads) and every
+// local it overwrites.  An operand loaded before a later store of the same local no longer describes that local.
+struct BlockEvent {
+  bool is_expression = false;
+  std::string expression;
+  std::set<ir::LocalId> locals;   // for an expression: the locals it reads; for a kill: the overwritten locals
+};
+
+std::vector<BlockEvent> block_events(const ir::Function& function, const ir::BasicBlock& block) {
+  std::vector<BlockEvent> events;
+  std::map<ir::ValueId, Described> described;
+  std::map<ir::ValueId, std::pair<ir::LocalId, std::size_t>> loaded;  // value -> (local, store count when loaded)
+  std::map<ir::LocalId, std::size_t> stores;
+  auto describe = [&](ir::ValueId value) -> const Described* {
+    const auto load = loaded.find(value);
+    if (load != loaded.end() && stores[load->second.first] != load->second.second) {
+      return nullptr;  // the local changed after this load
+    }
+    const auto found = described.find(value);
+    return found == described.end() ? nullptr : &found->second;
+  };
+  auto kill = [&](ir::LocalId local) {
+    ++stores[local];
+    events.push_back(BlockEvent{false, "", {local}});
+  };
+  for (const auto& instruction : block.instructions) {
+    switch (instruction.kind) {
+      case ir::InstructionKind::ConstInt:
+        if (instruction.result) described[*instruction.result] = Described{std::to_string(instruction.int_immediate), {}, false};
+        break;
+      case ir::InstructionKind::LoadLocal:
+        if (instruction.result) {
+          described[*instruction.result] = Described{ir::local_info(function, instruction.local).name, {instruction.local}, false};
+          loaded[*instruction.result] = {instruction.local, stores[instruction.local]};
+        }
+        break;
+      case ir::InstructionKind::Binary: {
+        const auto* lhs = describe(instruction.operands.at(0));
+        const auto* rhs = describe(instruction.operands.at(1));
+        if (lhs == nullptr || rhs == nullptr || !instruction.result) break;
+        std::string left = lhs->compound ? "(" + lhs->text + ")" : lhs->text;
+        std::string right = rhs->compound ? "(" + rhs->text + ")" : rhs->text;
+        if (is_commutative(instruction.binary_op) && right < left) std::swap(left, right);
+        Described result{left + " " + operator_text(instruction.binary_op) + " " + right, lhs->locals, true};
+        result.locals.insert(rhs->locals.begin(), rhs->locals.end());
+        if (!result.locals.empty()) {  // constant expressions are constant folding's job
+          events.push_back(BlockEvent{true, result.text, result.locals});
+        }
+        described[*instruction.result] = std::move(result);
+        break;
+      }
+      case ir::InstructionKind::StoreLocal:
+      case ir::InstructionKind::StoreElement:
+        kill(instruction.local);
+        break;
+      case ir::InstructionKind::Call:
+        for (const auto& argument : instruction.call_arguments) {
+          if (argument.kind == ir::CallArgumentKind::LocalRef) kill(argument.local);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+  return events;
+}
+
+}  // namespace
+
+AvailableExpressionProblem available_expression_problem(const ir::Function& function) {
+  AvailableExpressionProblem problem;
+  std::map<std::string, DataFlowEntityId> ids;
+  std::vector<std::set<ir::LocalId>> uses;
+  std::vector<std::vector<BlockEvent>> per_block;
+  for (const auto& block : function.blocks) {
+    per_block.push_back(block_events(function, block));
+    for (const auto& event : per_block.back()) {
+      if (event.is_expression && ids.try_emplace(event.expression, problem.expressions.size()).second) {
+        problem.expressions.push_back(event.expression);
+        uses.push_back(event.locals);
+      }
+    }
+  }
+  problem.transfer.assign(function.blocks.size(), {});
+  for (std::size_t block = 0; block < per_block.size(); ++block) {
+    auto& f = problem.transfer[block];
+    for (const auto& event : per_block[block]) {
+      if (event.is_expression) {
+        f.gen.insert(ids.at(event.expression));
+        continue;
+      }
+      for (DataFlowEntityId e = 0; e < problem.expressions.size(); ++e) {
+        if (uses[e].contains(*event.locals.begin())) {
+          f.gen.erase(e);
+          f.kill.insert(e);
+        }
+      }
+    }
+    f = normalized(f);
+  }
+  return problem;
+}
+
+std::vector<RedundantExpression> redundant_expressions(const ir::Function& function,
+                                                       const AvailableExpressionProblem& problem,
+                                                       const std::vector<DataFlowSet>& in_sets,
+                                                       const std::vector<bool>& reachable) {
+  std::map<std::string, DataFlowEntityId> ids;
+  for (DataFlowEntityId e = 0; e < problem.expressions.size(); ++e) ids[problem.expressions[e]] = e;
+  std::vector<std::set<ir::LocalId>> uses(problem.expressions.size());
+  for (const auto& block : function.blocks) {
+    for (const auto& event : block_events(function, block)) {
+      if (event.is_expression) uses[ids.at(event.expression)] = event.locals;
+    }
+  }
+  std::vector<RedundantExpression> redundant;
+  for (ir::BlockId block = 0; block < function.blocks.size(); ++block) {
+    if (!reachable[block]) continue;
+    DataFlowSet from_entry = in_sets[block];  // available on entry and not killed yet
+    DataFlowSet local;                        // computed earlier in this block and not killed yet
+    for (const auto& event : block_events(function, function.blocks[block])) {
+      if (event.is_expression) {
+        const auto e = ids.at(event.expression);
+        if (local.contains(e) || from_entry.contains(e)) {
+          redundant.push_back(RedundantExpression{block, event.expression, !local.contains(e)});
+        }
+        local.insert(e);
+        continue;
+      }
+      for (DataFlowEntityId e = 0; e < problem.expressions.size(); ++e) {
+        if (uses[e].contains(*event.locals.begin())) {
+          from_entry.erase(e);
+          local.erase(e);
+        }
+      }
+    }
+  }
+  return redundant;
+}
+
+std::string print_available_expressions(const ir::Function& function, const ControlFlowGraph& cfg) {
+  std::ostringstream output;
+  output << "func " << function.name << " available expressions:\n";
+  const auto tree = build_region_tree(cfg);
+  if (!tree.reducible) {
+    output << "  " << tree.error << '\n';
+    return output.str();
+  }
+  const auto problem = available_expression_problem(function);
+  const auto solution = solve_forward_by_regions(cfg, tree, problem.transfer, Meet::Intersection, {});
+  auto names = [&](const DataFlowSet& set) {
+    std::string text = "{";
+    for (const auto e : set) text += (text.size() > 1 ? ", " : "") + problem.expressions[e];
+    return text + "}";
+  };
+  for (ir::BlockId block = 0; block < function.blocks.size(); ++block) {
+    if (!tree.reachable[block]) continue;
+    output << "  bb" << block << '.' << function.blocks[block].label << "  in " << names(solution.in_sets[block])
+           << "  out " << names(solution.out_sets[block]) << '\n';
+  }
+  const auto redundant = redundant_expressions(function, problem, solution.in_sets, tree.reachable);
+  output << "redundant computations: " << (redundant.empty() ? "none" : std::to_string(redundant.size())) << '\n';
+  for (const auto& r : redundant) {
+    output << "  bb" << r.block << '.' << function.blocks[r.block].label << ": " << r.expression << "  ("
+           << (r.from_other_blocks ? "available on every path into the block" : "computed earlier in the same block")
+           << ")\n";
+  }
+
+  // Iterative reference with intersection meet over the reachable blocks.
+  DataFlowSet universe;
+  for (DataFlowEntityId e = 0; e < problem.expressions.size(); ++e) universe.insert(e);
+  std::vector<DataFlowSet> in(function.blocks.size(), universe);
+  std::vector<DataFlowSet> out(function.blocks.size());
+  for (ir::BlockId block = 0; block < function.blocks.size(); ++block) out[block] = evaluate(problem.transfer[block], in[block]);
+  std::size_t passes = 0;
+  for (bool changed = true; changed; ++passes) {
+    changed = false;
+    for (ir::BlockId block = 0; block < function.blocks.size(); ++block) {
+      if (!tree.reachable[block]) continue;
+      std::optional<DataFlowSet> meet;
+      if (block == cfg.entry_block) meet = DataFlowSet{};
+      for (const auto pred : cfg.predecessors[block]) {
+        if (!tree.reachable[pred]) continue;
+        meet = meet.has_value() ? set_intersection(*meet, out[pred]) : out[pred];
+      }
+      const auto new_in = meet.value_or(DataFlowSet{});
+      const auto new_out = evaluate(problem.transfer[block], new_in);
+      if (new_in != in[block] || new_out != out[block]) {
+        in[block] = new_in;
+        out[block] = new_out;
+        changed = true;
+      }
+    }
+  }
+  bool agree = true;
+  for (ir::BlockId block = 0; block < function.blocks.size(); ++block) {
+    agree = agree && (!tree.reachable[block] || in[block] == solution.in_sets[block]);
+  }
+  output << "region solver (intersection meet): " << solution.compositions << " compositions, " << solution.meets
+         << " meets, " << solution.closures << " closures; iterative solver (" << passes << " passes) "
+         << (agree ? "agrees" : "DISAGREES") << '\n';
   return output.str();
 }
 

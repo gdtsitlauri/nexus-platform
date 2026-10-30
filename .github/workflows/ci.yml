@@ -1,0 +1,26 @@
+name: build and test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchains
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build flex bison iverilog yosys libopenmpi-dev openmpi-bin llvm-dev clang
+          llvm-config --version
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DLLVM_DIR="$(llvm-config --cmakedir)"
+      - name: Build
+        run: cmake --build build --parallel 4
+      - name: Test
+        env:
+          OMPI_MCA_rmaps_base_oversubscribe: "1"
+        run: ctest --test-dir build --output-on-failure -j2
+      - name: LLVM pass (NEY709)
+        run: ctest --test-dir build -R nexus_llvm_pass -V

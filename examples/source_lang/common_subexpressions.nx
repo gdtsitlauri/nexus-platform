@@ -1,0 +1,21 @@
+// Common subexpressions (NEY709 (f)).
+// Inside one block, a + b is computed twice: local value numbering removes the second copy.
+// a * b is computed on both branches of the if, so it is available after the join: the later
+// a * b is redundant (global), while a + b after "a = a + 1" is a new value and must be computed again.
+fn f(a: int, b: int) -> int {
+  var x: int = (a + b) * (a + b);
+  var y: int = 0;
+  if (a > b) {
+    y = a * b;
+  } else {
+    y = a * b + 1;
+  }
+  var z: int = a * b;
+  a = a + 1;
+  var w: int = a + b;
+  return x + y + z + w;
+}
+
+fn main() -> int {
+  return f(3, 4);
+}

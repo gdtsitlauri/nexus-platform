@@ -27,9 +27,9 @@ flowchart LR
 | [NEY221 Principles of Computer Operation](NEY221.md) | organisation of a computer · MIPS assembly and procedures · instruction set styles · number representation · adders, multipliers, dividers |
 | [EY321 Computer Organization](EY321.md) | performance · single-cycle datapath · multi-cycle and microprogrammed control · pipelining and hazards · caches · virtual memory · I/O · Verilog lab |
 | [NEY606 Computer Architecture](NEY606.md) | Amdahl's law · superscalar · scoreboard and Tomasulo · branch prediction · VLIW and software pipelining · non-blocking caches |
-| [NEY704 Parallel Systems](NEY704.md) | Flynn · multithreading · coherence · consistency and synchronisation · OpenMP · MPI · vectors and SIMD · GPUs · networks |
+| [NEY704 Parallel Systems](NEY704.md) | Flynn · multithreading · coherence (C++ and Verilog) · consistency and synchronisation · OpenMP · MPI · vectors and SIMD · GPUs · networks |
 | [NEY613 Compilers](NEY613.md) | automata and data structures · lexical analysis · LL and LR parsing · semantic analysis · quadruples · code generation |
-| [NEY709 Advanced Compiler Topics](NEY709.md) | generalised parsing and types · SSA · dominators and lattices · iterative and region-based data flow · constants · unrolling · polyhedral and tiling · alias and interprocedural |
+| [NEY709 Advanced Compiler Topics](NEY709.md) | generalised parsing and types · SSA · dominators and lattices · iterative and region-based data flow · constants and common subexpressions · unrolling · polyhedral and tiling · alias and interprocedural · an LLVM pass |
 
 ## Tips
 

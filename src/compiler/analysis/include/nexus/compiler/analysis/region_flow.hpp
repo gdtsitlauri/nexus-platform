@@ -77,6 +77,30 @@ struct ReachingDefinitionProblem {
 };
 
 ReachingDefinitionProblem reaching_definition_problem(const ir::Function& function);
+
+// Available expressions (a must problem: intersection meet).  An expression is a binary operation over locals and
+// constants, written as source text with commutative operands sorted ("a + b" = "b + a").  A block generates the
+// expressions it computes and kills every expression that uses a local it stores (or passes by reference to a
+// call).  An expression computed where it is already available is redundant: its value could be reused.
+struct RedundantExpression {
+  ir::BlockId block = 0;
+  std::string expression;
+  bool from_other_blocks = false;  // available on entry to the block (global), not only computed earlier in it
+};
+
+struct AvailableExpressionProblem {
+  std::vector<std::string> expressions;  // the universe; DataFlowEntityId indexes it
+  std::vector<GenKill> transfer;         // per block
+};
+
+AvailableExpressionProblem available_expression_problem(const ir::Function& function);
+std::vector<RedundantExpression> redundant_expressions(const ir::Function& function,
+                                                       const AvailableExpressionProblem& problem,
+                                                       const std::vector<DataFlowSet>& in_sets,
+                                                       const std::vector<bool>& reachable);
+// Available expressions solved by regions, the redundant computations, and a cross-check against an iterative
+// solver with intersection meet.
+std::string print_available_expressions(const ir::Function& function, const ControlFlowGraph& cfg);
 // Region tree, reaching definitions solved by regions, and a cross-check against the iterative solver.
 std::string print_region_analysis(const ir::Function& function, const ControlFlowGraph& cfg);
 

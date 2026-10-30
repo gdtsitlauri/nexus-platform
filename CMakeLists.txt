@@ -2,11 +2,11 @@ cmake_minimum_required(VERSION 3.25)
 
 project(
   Nexus
-  VERSION 4.0.0
+  VERSION 4.1.0
   DESCRIPTION "Nexus educational systems and compiler platform"
   LANGUAGES CXX)
 
-set(NEXUS_VERSION_LABEL "4.0.0" CACHE STRING "Human-readable project version label" FORCE)
+set(NEXUS_VERSION_LABEL "4.1.0" CACHE STRING "Human-readable project version label" FORCE)
 set(
   NEXUS_PHASE_LABEL
   "4.0 - study guides"
@@ -30,11 +30,27 @@ if(NEXUS_ENABLE_CUDA)
   endif()
 endif()
 
+# NEY709 project option: passes inside an open-source compiler.  LLVM loads pass plugins only on Unix-like hosts.
+option(NEXUS_ENABLE_LLVM_PASS "Build the LLVM pass plugin when LLVM development files are found." ON)
+set(NEXUS_LLVM_PASS_ENABLED OFF)
+if(NEXUS_ENABLE_LLVM_PASS AND NOT WIN32)
+  find_package(LLVM CONFIG QUIET)
+  if(LLVM_FOUND)
+    set(NEXUS_LLVM_PASS_ENABLED ON)
+    message(STATUS "LLVM ${LLVM_PACKAGE_VERSION} found: building the NexusPasses plugin")
+  else()
+    message(STATUS "LLVM development files not found: the LLVM pass plugin is skipped")
+  endif()
+endif()
+
 include(CTest)
 include(cmake/ProjectOptions.cmake)
 include(cmake/Warnings.cmake)
 include(cmake/Sanitizers.cmake)
 
 add_subdirectory(src)
+if(NEXUS_LLVM_PASS_ENABLED)
+  add_subdirectory(src/llvm_pass)
+endif()
 add_subdirectory(tests)
 

@@ -18,10 +18,11 @@ add_test(NAME nexus_hdl_register_file COMMAND "${Python3_EXECUTABLE}" "${PROJECT
 add_test(NAME nexus_hdl_control COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/test_hdl.py" control)
 add_test(NAME nexus_hdl_pipeline_reg COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/test_hdl.py" pipeline-reg)
 add_test(NAME nexus_hdl_cpu_slice COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/test_hdl.py" cpu-slice)
+add_test(NAME nexus_hdl_msi COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/test_hdl.py" msi)
 add_test(NAME nexus_hdl_all COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/test_hdl.py" all)
 set_tests_properties(
   nexus_hdl_adder nexus_hdl_alu nexus_hdl_multiplier nexus_hdl_divider nexus_hdl_register_file
-  nexus_hdl_control nexus_hdl_pipeline_reg nexus_hdl_cpu_slice nexus_hdl_all
+  nexus_hdl_control nexus_hdl_pipeline_reg nexus_hdl_cpu_slice nexus_hdl_msi nexus_hdl_all
   PROPERTIES SKIP_RETURN_CODE 77)
 
 add_test(
@@ -145,3 +146,19 @@ set_tests_properties(nexus_full_flow PROPERTIES SKIP_RETURN_CODE 77)
 add_test(
   NAME nexus_docs_links
   COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/docs_links_test.py" "${PROJECT_SOURCE_DIR}")
+
+if(TARGET NexusPasses)
+  find_program(NEXUS_LLVM_CLANG NAMES clang clang-${LLVM_VERSION_MAJOR} HINTS "${LLVM_TOOLS_BINARY_DIR}")
+  find_program(NEXUS_LLVM_OPT NAMES opt opt-${LLVM_VERSION_MAJOR} HINTS "${LLVM_TOOLS_BINARY_DIR}")
+  if(NEXUS_LLVM_CLANG AND NEXUS_LLVM_OPT)
+    add_test(
+      NAME nexus_llvm_pass
+      COMMAND
+        "${Python3_EXECUTABLE}"
+        "${PROJECT_SOURCE_DIR}/tests/integration/llvm_pass_test.py"
+        "$<TARGET_FILE:NexusPasses>"
+        "${NEXUS_LLVM_CLANG}"
+        "${NEXUS_LLVM_OPT}"
+        "${PROJECT_SOURCE_DIR}")
+  endif()
+endif()

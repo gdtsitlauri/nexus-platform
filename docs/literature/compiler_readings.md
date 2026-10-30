@@ -14,7 +14,8 @@ guide section next to it.
 | R. Cytron et al., *Efficiently Computing Static Single Assignment Form and the Control Dependence Graph*, ACM TOPLAS, 1991 | SSA, dominance frontiers | [NEY709 §2](../courses/NEY709.md#2-intermediate-representations-and-ssa) |
 | G. A. Kildall, *A Unified Approach to Global Program Optimization*, POPL, 1973 | data-flow frameworks, lattices | [NEY709 §4](../courses/NEY709.md#4-data-flow-analysis-iterative-and-region-based) |
 | F. E. Allen, J. Cocke, *A Program Data Flow Analysis Procedure*, CACM, 1976 | interval (region-based) analysis | [NEY709 §4](../courses/NEY709.md#4-data-flow-analysis-iterative-and-region-based) |
-| M. N. Wegman, F. K. Zadeck, *Constant Propagation with Conditional Branches*, ACM TOPLAS, 1991 | SCCP | [NEY709 §5](../courses/NEY709.md#5-using-the-analyses-constants-and-symbolic-analysis) |
+| M. N. Wegman, F. K. Zadeck, *Constant Propagation with Conditional Branches*, ACM TOPLAS, 1991 | SCCP | [NEY709 §5](../courses/NEY709.md#5-using-the-analyses-constants-common-subexpressions-symbolic-analysis) |
+| J. Cocke, *Global Common Subexpression Elimination*, SIGPLAN Notices, 1970 | available expressions, CSE | [NEY709 §5](../courses/NEY709.md#5-using-the-analyses-constants-common-subexpressions-symbolic-analysis) |
 | L. Lamport, *The Parallel Execution of DO Loops*, CACM, 1974 | hyperplane (wavefront) schedules | [NEY709 §7](../courses/NEY709.md#7-iteration-spaces-and-polyhedral-transformations) |
 | M. E. Wolf, M. S. Lam, *A Data Locality Optimizing Algorithm*, PLDI, 1991 | unimodular transformations, tiling | [NEY709 §7](../courses/NEY709.md#7-iteration-spaces-and-polyhedral-transformations) |
 | P. Feautrier, *Some Efficient Solutions to the Affine Scheduling Problem*, Int. J. Parallel Programming, 1992 | schedules by linear programming | [NEY709 §7](../courses/NEY709.md#7-iteration-spaces-and-polyhedral-transformations) |

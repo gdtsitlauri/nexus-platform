@@ -4,7 +4,8 @@ add_library(
     src/loop_unroll.cpp
     src/affine_stripmine.cpp
     src/interprocedural_pass.cpp
-    src/modulo_schedule.cpp)
+    src/modulo_schedule.cpp
+    src/value_numbering.cpp)
 
 add_library(Nexus::passes ALIAS nexus_passes)
 

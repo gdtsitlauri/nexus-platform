@@ -41,11 +41,11 @@ def main() -> int:
         "help output missing experimental parse usage",
     )
     require(
-        "nexusc opt <file> --analysis symbolic|regions|affine|alias|interproc" in help_result.stdout,
+        "nexusc opt <file> --analysis symbolic|regions|available|affine|alias|interproc" in help_result.stdout,
         "help output missing Phase 9 analysis usage",
     )
     require(
-        "nexusc opt <file> --pass unroll|unroll-symbolic|strip-mine|interproc-constfold" in help_result.stdout,
+        "nexusc opt <file> --pass unroll|unroll-symbolic|strip-mine|interproc-constfold|cse" in help_result.stdout,
         "help output missing Phase 9 pass usage",
     )
     require("nexusc compile <file> -S [-o out.s]" in help_result.stdout, "help output missing compile usage")

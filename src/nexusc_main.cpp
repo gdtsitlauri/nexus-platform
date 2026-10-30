@@ -35,6 +35,7 @@
 #include "nexus/compiler/polyhedral/polyhedral.hpp"
 #include "nexus/compiler/polyhedral/schedule.hpp"
 #include "nexus/compiler/passes/affine_stripmine.hpp"
+#include "nexus/compiler/passes/value_numbering.hpp"
 #include "nexus/compiler/passes/loop_unroll.hpp"
 #include "nexus/compiler/semantics/semantic_analyzer.hpp"
 #include "nexus/compiler/types/hindley_milner.hpp"
@@ -64,8 +65,8 @@ void print_usage(std::ostream& stream) {
          << "  nexusc analysis regalloc <file>\n"
          << "  nexusc analysis ssa|sccp <file>\n"
          << "  nexusc experimental-parse <file> --mode parallel|bison-lr\n"
-         << "  nexusc opt <file> --analysis symbolic|regions|affine|alias|interproc\n"
-         << "  nexusc opt <file> --pass unroll|unroll-symbolic|strip-mine|interproc-constfold\n"
+         << "  nexusc opt <file> --analysis symbolic|regions|available|affine|alias|interproc\n"
+         << "  nexusc opt <file> --pass unroll|unroll-symbolic|strip-mine|interproc-constfold|cse\n"
          << "  nexusc opt <file> --pass unroll-remainder [--factor K]\n"
          << "  nexusc compile <file> -S [-o out.s]\n"
          << "  nexusc compile <file> -S --regalloc none|linear-scan [-o out.s]\n"
@@ -318,6 +319,11 @@ int run_analysis(const LoadedSource& loaded_source, const std::string& analysis_
       std::cout << nexus::compiler::analysis::print_symbolic(module->functions[index], cfg, symbolic);
       continue;
     }
+    if (analysis_name == "available") {
+      const auto cfg = nexus::compiler::analysis::build_cfg(module->functions[index]);
+      std::cout << nexus::compiler::analysis::print_available_expressions(module->functions[index], cfg);
+      continue;
+    }
     if (analysis_name == "regions") {
       const auto cfg = nexus::compiler::analysis::build_cfg(module->functions[index]);
       std::cout << nexus::compiler::analysis::print_region_analysis(module->functions[index], cfg);
@@ -418,6 +424,15 @@ int run_opt(const LoadedSource& loaded_source, const OptOptions& options) {
       std::cout << "; " << note << '\n';
     }
     return unrolled.transformed_loops > 0 ? 0 : 2;
+  }
+
+  if (*options.pass == "cse") {
+    const auto numbered = nexus::compiler::passes::number_values(*module);
+    std::cout << nexus::compiler::ir::print_module(numbered.module);
+    for (const auto& note : numbered.notes) {
+      std::cout << "; " << note << '\n';
+    }
+    return 0;
   }
 
   if (*options.pass == "strip-mine") {

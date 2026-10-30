@@ -1,5 +1,17 @@
 # Changelog
 
+## [4.1.0] - 2026-10-30
+
+The three topics that 4.0.0 covered only in part:
+
+- NEY709 (f) expression optimisation: local value numbering (`nexusc opt --pass cse`, with store-to-load
+  forwarding) and available expressions solved by regions with an intersection meet (`--analysis available`),
+  checked by running every repository program and 120 random programs before and after
+- NEY704: a 4-core MSI snooping memory system in Verilog (`src/hdl/multicore`, `scripts/test_hdl.py msi`) whose
+  testbench checks coherence and the single-writer invariant every cycle
+- NEY709 project option: two passes for LLVM (`src/llvm_pass`: strength reduction, loop report), built and tested
+  on Linux by the new GitHub Actions workflow, which also builds and tests the whole project with gcc
+
 ## [4.0.0] - 2026-10-30
 
 NEXUS becomes study material for students: simpler, with one study guide per course.
