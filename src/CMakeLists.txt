@@ -29,7 +29,7 @@ nexus_apply_project_options(nexusc)
 nexus_set_warnings(nexusc)
 nexus_enable_sanitizers(nexusc)
 
-add_executable(mips_sim mips_sim_main.cpp)
+add_executable(mips_sim mips_sim_main.cpp mips_sim_course_tools.cpp)
 set_target_properties(mips_sim PROPERTIES OUTPUT_NAME "mips-sim")
 target_link_libraries(
   mips_sim
@@ -43,6 +43,7 @@ target_link_libraries(
     nexus_sim_advanced
     nexus_sim_parallel
     nexus_sim_simt
+    nexus_sim_vector
     nexus_sim_metrics)
 nexus_apply_project_options(mips_sim)
 nexus_set_warnings(mips_sim)

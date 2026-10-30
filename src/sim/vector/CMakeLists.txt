@@ -1,0 +1,6 @@
+add_library(nexus_sim_vector STATIC src/model.cpp)
+add_library(Nexus::sim_vector ALIAS nexus_sim_vector)
+target_include_directories(nexus_sim_vector PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+nexus_apply_project_options(nexus_sim_vector)
+nexus_set_warnings(nexus_sim_vector)
+nexus_enable_sanitizers(nexus_sim_vector)

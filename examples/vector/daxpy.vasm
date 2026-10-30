@@ -1,0 +1,19 @@
+; DAXPY, Y = a*X + Y, strip-mined over vectors of at most MVL elements (Hennessy & Patterson, chapter 4).
+.param n 200
+.array X n ramp
+.array Y n const 2
+.scalar F0 3
+        LA    R1, X
+        LA    R2, Y
+        LI    R3, n          ; elements left
+loop:   SETVL R3             ; VL = min(n left, MVL)
+        LV    V1, R1         ; X
+        MULVS V2, V1, F0     ; a*X       (chained to the load)
+        LV    V3, R2         ; Y
+        ADDVV V4, V2, V3     ; a*X + Y   (chained)
+        SV    V4, R2
+        ADDVL R1             ; advance by VL
+        ADDVL R2
+        SUBVL R3
+        BNEZ  R3, loop
+        HALT

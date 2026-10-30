@@ -30,6 +30,7 @@ void print_usage(std::ostream& stream) {
          << "  mips-sim --help\n"
          << "  mips-sim fp-demo <lhs> <rhs>\n"
          << "  mips-sim encode <file> [-o image.hex]\n"
+         << "  mips-sim vector <file.vasm> [--n N] [--mvl M] [--lanes L] [--no-chaining] [--trace]\n"
          << "  mips-sim arith float <a> add|sub|mul|div <b>\n"
          << "  mips-sim arith repr <integer> [bits]\n"
          << "  mips-sim arith booth <a> <b> [bits]\n"
@@ -354,6 +355,8 @@ std::string format_hierarchy_name(
 
 }  // namespace
 
+int run_vector(int argc, char** argv);  // mips_sim_course_tools.cpp
+
 int main(int argc, char** argv) {
   if (argc == 1) {
     std::cout << nexus::common::banner_text("mips-sim") << '\n'
@@ -369,6 +372,10 @@ int main(int argc, char** argv) {
 
   if (command == "arith") {
     return run_arith(argc, argv);
+  }
+
+  if (command == "vector") {
+    return run_vector(argc, argv);
   }
 
   if (command == "encode") {

@@ -1,0 +1,13 @@
+; Strided access: copy column 3 of an 8 x 8 row-major matrix into a contiguous vector (stride 8).
+.param rows 8
+.array M 64 ramp
+.array C rows zero
+        LA    R1, M
+        ADDI  R1, R1, 3       ; &M[0][3]
+        LI    R2, 8           ; stride = row length
+        LA    R4, C
+        LI    R3, rows
+        SETVL R3
+        LVWS  V1, R1, R2
+        SV    V1, R4
+        HALT
