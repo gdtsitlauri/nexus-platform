@@ -24,6 +24,8 @@ constexpr std::size_t kLocalWordsPerThread = 4096;  // private stack: 16 KiB per
 constexpr std::int32_t kStackTop = static_cast<std::int32_t>((kGlobalWords + kLocalWordsPerThread) * 4);
 constexpr std::int32_t kStackBottom = static_cast<std::int32_t>(kGlobalWords * 4);
 constexpr std::size_t kNoPc = std::numeric_limits<std::size_t>::max();
+constexpr std::size_t kSharedWordsPerBlock = 4096;  // 16 KiB of shared memory per block
+constexpr std::size_t kBanks = 32;
 
 struct Thread {
   std::array<std::int32_t, 32> regs{};
@@ -42,6 +44,8 @@ struct Warp {
   std::vector<std::size_t> lanes;  // thread ids
   std::vector<StackEntry> stack;
   bool done = false;
+  std::size_t block = 0;
+  bool at_barrier = false;
 };
 
 bool is_branch(Opcode opcode) { return opcode == Opcode::Beq || opcode == Opcode::Bne; }
@@ -116,7 +120,9 @@ class Machine {
         ipdom_(immediate_post_dominators(program)),
         global_(kGlobalWords, 0),
         local_(kLocalWordsPerThread * options.threads, 0),
-        threads_(options.threads) {}
+        threads_(options.threads),
+        block_size_(options.block_size == 0 ? options.threads : options.block_size),
+        shared_(kSharedWordsPerBlock * ((options.threads + block_size_ - 1) / block_size_), 0) {}
 
   bool run() {
     std::size_t entry = program_.entry_point;
@@ -127,17 +133,23 @@ class Machine {
       auto& regs = threads_[id].regs;
       regs[mips::isa::register_index(Register::A0)] = static_cast<std::int32_t>(id);
       regs[mips::isa::register_index(Register::A1)] = static_cast<std::int32_t>(threads_.size());
+      regs[mips::isa::register_index(Register::A2)] = static_cast<std::int32_t>(id / block_size_);
+      regs[mips::isa::register_index(Register::A3)] = static_cast<std::int32_t>(id % block_size_);
       regs[mips::isa::register_index(Register::SP)] = kStackTop - 64;
       regs[mips::isa::register_index(Register::RA)] = kHaltReturnAddress;
     }
     std::vector<Warp> warps;
-    for (std::size_t first = 0; first < threads_.size(); first += options_.warp_size) {
-      Warp warp;
-      for (std::size_t lane = first; lane < std::min(first + options_.warp_size, threads_.size()); ++lane) {
-        warp.lanes.push_back(lane);
+    for (std::size_t block_first = 0; block_first < threads_.size(); block_first += block_size_) {
+      const std::size_t block_end = std::min(block_first + block_size_, threads_.size());
+      for (std::size_t first = block_first; first < block_end; first += options_.warp_size) {
+        Warp warp;
+        warp.block = block_first / block_size_;
+        for (std::size_t lane = first; lane < std::min(first + options_.warp_size, block_end); ++lane) {
+          warp.lanes.push_back(lane);
+        }
+        warp.stack.push_back({entry, std::vector<bool>(warp.lanes.size(), true), kNoPc});
+        warps.push_back(std::move(warp));
       }
-      warp.stack.push_back({entry, std::vector<bool>(warp.lanes.size(), true), kNoPc});
-      warps.push_back(std::move(warp));
     }
     result_.warps = warps.size();
     result_.thread_results.assign(threads_.size(), 0);
@@ -151,6 +163,10 @@ class Machine {
           continue;
         }
         remaining = true;
+        if (warp.at_barrier) {
+          ++result_.barrier_wait_cycles;
+          continue;
+        }
         if (result_.warp_instructions >= options_.max_warp_instructions) {
           result_.error = "SIMT instruction limit exceeded";
           return false;
@@ -159,6 +175,24 @@ class Machine {
           return false;
         }
         ++result_.cycles;
+      }
+      // release every block whose warps have all reached the barrier (or finished)
+      const std::size_t blocks = (threads_.size() + block_size_ - 1) / block_size_;
+      for (std::size_t block = 0; block < blocks; ++block) {
+        bool waiting = false;
+        bool all_arrived = true;
+        for (const auto& warp : warps) {
+          if (warp.block != block || warp.done) continue;
+          waiting = waiting || warp.at_barrier;
+          all_arrived = all_arrived && warp.at_barrier;
+        }
+        if (waiting && all_arrived) {
+          for (auto& warp : warps) {
+            if (warp.block == block) warp.at_barrier = false;
+          }
+          ++result_.barriers;
+          remaining = true;
+        }
       }
     }
     for (std::size_t id = 0; id < threads_.size(); ++id) {
@@ -171,6 +205,12 @@ class Machine {
   std::int32_t& memory(std::size_t thread, std::int32_t address, bool& local, std::size_t& physical) {
     if (address < 0 || address % 4 != 0) {
       throw std::string("invalid word address " + std::to_string(address));
+    }
+    if (address >= kSharedBase && address < kSharedBase + static_cast<std::int32_t>(kSharedWordsPerBlock * 4)) {
+      local = false;
+      physical = (thread / block_size_) * kSharedWordsPerBlock + static_cast<std::size_t>((address - kSharedBase) / 4);
+      last_shared_ = true;
+      return shared_[physical];
     }
     if (address >= kStackBottom && address < kStackTop) {
       const auto offset = static_cast<std::size_t>((address - kStackBottom) / 4);
@@ -234,6 +274,10 @@ class Machine {
           reg(thread, in.rt) = word;
         } else {
           word = rt;
+        }
+        if (last_shared_) {
+          segments.push_back(physical);  // shared-memory word (banked), taken out by the caller
+          break;
         }
         // 128-byte segments; local memory lives in a separate address range
         segments.push_back((physical * 4) / 128 + (local ? (1ULL << 40U) : 0U));
@@ -377,14 +421,43 @@ class Machine {
         top.pc = static_cast<std::size_t>(*target);
         return true;
       }
-      std::vector<std::size_t> segments;
-      bool any_local = false;
-      for (std::size_t lane = 0; lane < warp.lanes.size(); ++lane) {
-        if (top.mask[lane]) {
-          execute(threads_[warp.lanes[lane]], warp.lanes[lane], in, segments, any_local);
+      if (in.opcode == Opcode::Sw) {
+        // __syncthreads(): a store to the barrier address by the warp's active lanes
+        for (std::size_t lane = 0; lane < warp.lanes.size(); ++lane) {
+          if (!top.mask[lane]) continue;
+          Thread& thread = threads_[warp.lanes[lane]];
+          if (reg(thread, in.rs) + in.immediate == kBarrierAddress) {
+            warp.at_barrier = true;
+            top.pc += 1;
+            return true;
+          }
+          break;
         }
       }
-      if (in.opcode == Opcode::Lw || in.opcode == Opcode::Sw) {
+      std::vector<std::size_t> segments;
+      bool any_local = false;
+      std::vector<std::size_t> shared_words;
+      for (std::size_t lane = 0; lane < warp.lanes.size(); ++lane) {
+        if (top.mask[lane]) {
+          last_shared_ = false;
+          execute(threads_[warp.lanes[lane]], warp.lanes[lane], in, segments, any_local);
+          if (last_shared_ && !segments.empty()) {
+            shared_words.push_back(segments.back());
+            segments.pop_back();
+          }
+        }
+      }
+      if (!shared_words.empty()) {
+        ++result_.shared_requests;
+        std::sort(shared_words.begin(), shared_words.end());
+        shared_words.erase(std::unique(shared_words.begin(), shared_words.end()), shared_words.end());
+        std::vector<std::size_t> per_bank(kBanks, 0);
+        std::size_t worst = 0;
+        for (const auto word : shared_words) worst = std::max(worst, ++per_bank[word % kBanks]);
+        result_.bank_conflict_cycles += worst - 1;
+        result_.cycles += worst - 1;
+      }
+      if ((in.opcode == Opcode::Lw || in.opcode == Opcode::Sw) && !segments.empty()) {
         std::sort(segments.begin(), segments.end());
         ++result_.memory_requests;
         result_.memory_transactions += static_cast<std::size_t>(std::unique(segments.begin(), segments.end()) - segments.begin());
@@ -405,6 +478,9 @@ class Machine {
   std::vector<std::int32_t> global_;
   std::vector<std::int32_t> local_;
   std::vector<Thread> threads_;
+  std::size_t block_size_;
+  std::vector<std::int32_t> shared_;
+  bool last_shared_ = false;
 };
 
 }  // namespace

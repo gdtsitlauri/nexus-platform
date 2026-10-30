@@ -58,7 +58,7 @@ void print_usage(std::ostream& stream) {
          << "  mips-sim run <file> --mode parallel [--cores N] [--coherence snoop|directory-lite]\n"
          << "               [--consistency sc|weak-lite] [--interconnect bus|switch|noc-lite|mesh|ring]\n"
          << "               [--core-cpi c0,c1,...]\n"
-         << "  mips-sim run <file> --mode simt [--threads N] [--warp-size N] [--trace] [--stats]\n"
+         << "  mips-sim run <file> --mode simt [--threads N] [--warp-size N] [--block N] [--trace] [--stats]\n"
          << "               [--trace] [--stats]\n";
 }
 
@@ -491,6 +491,7 @@ int main(int argc, char** argv) {
   std::vector<std::size_t> core_cpi;
   std::size_t simt_threads = 64;
   std::size_t simt_warp_size = 32;
+  std::size_t simt_block_size = 0;
 
   for (int index = 3; index < argc; ++index) {
     const std::string option = argv[index];
@@ -624,7 +625,7 @@ int main(int argc, char** argv) {
       smt_file = argv[++index];
       continue;
     }
-    if (option == "--threads" || option == "--warp-size") {
+    if (option == "--threads" || option == "--warp-size" || option == "--block") {
       if (index + 1 >= argc) {
         std::cerr << "error: missing numeric value after '" << option << "'\n";
         return 1;
@@ -634,7 +635,7 @@ int main(int argc, char** argv) {
         std::cerr << "error: expected a positive integer after '" << option << "'\n";
         return 1;
       }
-      (option == "--threads" ? simt_threads : simt_warp_size) = *parsed_value;
+      (option == "--threads" ? simt_threads : option == "--block" ? simt_block_size : simt_warp_size) = *parsed_value;
       continue;
     }
     if (option == "--rob" || option == "--rs" || option == "--cdb" || option == "--pipeline-depth") {
@@ -782,7 +783,7 @@ int main(int argc, char** argv) {
   if (mode == "simt") {
     const auto result = nexus::sim::simt::run_kernel(
         *parsed.program,
-        {.threads = simt_threads, .warp_size = simt_warp_size, .max_warp_instructions = 2'000'000, .trace = trace});
+        {.threads = simt_threads, .warp_size = simt_warp_size, .block_size = simt_block_size, .max_warp_instructions = 2'000'000, .trace = trace});
     if (!result.success) {
       std::cerr << "error: " << result.error << '\n';
       return 1;
@@ -806,7 +807,9 @@ int main(int argc, char** argv) {
               << "\nMax reconvergence-stack depth: " << result.max_stack_depth
               << "\nMemory requests: " << result.memory_requests << " (global " << result.global_requests << ", local "
               << result.local_requests << ")"
-              << "\nMemory transactions (128B): " << result.memory_transactions << '\n';
+              << "\nMemory transactions (128B): " << result.memory_transactions
+              << "\nShared-memory requests: " << result.shared_requests << " (bank-conflict cycles " << result.bank_conflict_cycles
+              << ")\nBarriers: " << result.barriers << " (warp wait slots " << result.barrier_wait_cycles << ")\n";
     if (result.memory_requests > 0) {
       std::cout << "Transactions per request: "
                 << static_cast<double>(result.memory_transactions) / static_cast<double>(result.memory_requests) << '\n';

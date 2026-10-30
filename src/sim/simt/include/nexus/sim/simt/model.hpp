@@ -21,9 +21,18 @@ namespace nexus::sim::simt {
 //     private "local memory", interleaved across threads exactly like CUDA local memory, so that
 //     identical stack offsets from a warp coalesce.  Each warp-level load/store is split into
 //     128-byte transactions to measure coalescing.
+//   * Thread blocks (block_size > 0): threads are grouped into blocks; warps never cross a block;
+//     $a2 = block id and $a3 = thread index inside the block.  Bytes [kSharedBase, kSharedBase + 16 KiB)
+//     are the block's shared memory (32 banks of 4-byte words: a warp access costs one extra cycle per
+//     additional distinct word in the busiest bank), and a store to kBarrierAddress is __syncthreads():
+//     the warp waits until every warp of its block has reached the barrier or finished.
+inline constexpr std::int32_t kSharedBase = 0x44000;
+inline constexpr std::int32_t kBarrierAddress = 0x48000;
+
 struct RunOptions {
   std::size_t threads = 64;
   std::size_t warp_size = 32;
+  std::size_t block_size = 0;  // 0: one block holding every thread
   std::size_t max_warp_instructions = 2'000'000;
   bool trace = false;
 };
@@ -43,6 +52,10 @@ struct RunResult {
   std::size_t memory_transactions = 0;  // 128-byte segments touched
   std::size_t global_requests = 0;
   std::size_t local_requests = 0;
+  std::size_t shared_requests = 0;
+  std::size_t bank_conflict_cycles = 0;
+  std::size_t barriers = 0;            // barrier releases
+  std::size_t barrier_wait_cycles = 0;  // issue slots in which a warp waited at a barrier
   std::vector<std::string> trace_lines;
 
   [[nodiscard]] double simd_efficiency(std::size_t warp_size) const {
