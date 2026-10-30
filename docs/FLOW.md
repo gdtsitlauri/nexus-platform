@@ -4,7 +4,7 @@ Start with a question small enough to hold in your head: **what is 1 + 2 + ... +
 The answer is 36. NEXUS shows what that question becomes at each level, why each level exists,
 and which parts of the computer can change while the answer stays the same.
 
-After the [one-time build](../README.md#build-it-once), run:
+After the [one-time build](../README.md#building-and-running), run:
 
 ```bash
 python scripts/nexus_flow.py build/bin

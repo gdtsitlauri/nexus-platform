@@ -1,7 +1,7 @@
 # NEXUS
 
-**Learn how computers work by running every step yourself:** from a line of source code, through the compiler,
-to machine code, to the processor that executes it, to many processors working together.
+**How does a line of source code become machine instructions that one processor, or many, can execute, and why is
+each step built the way it is?**
 
 NEXUS is study material for six courses of the Department of Informatics and Telecommunications, University of
 Thessaly. The guides explain the mechanisms and connect the theory to runnable
@@ -51,7 +51,7 @@ two built NEXUS tools and Python. [docs/FLOW.md](docs/FLOW.md) explains the conn
 analysis reports, generated code and the separate parallel implementation. The longer console/Verilog
 program runs with `--console`; missing Verilog tools skip only that optional part.
 
-## Build it (once)
+## Building and running
 
 You need CMake (3.25 or newer), Ninja, a C++20 compiler (a recent gcc or clang), Python 3, Flex and Bison.
 Optional: Icarus Verilog (the Verilog examples), an OpenMP compiler, MPI, CUDA, LLVM (the LLVM pass).
@@ -86,7 +86,7 @@ Check that everything works (one test at a time keeps a laptop cool):
 ctest --test-dir build --output-on-failure -j1
 ```
 
-## What is where
+## Folder map
 
 ```
 src/compiler/   the compiler: frontend (lexer, parser), semantics, ir, analysis, passes, backend_mips,
@@ -105,7 +105,7 @@ docs/           the connected flow, deeper notes per topic and reading lists
 tests/          automatic checks that keep every example correct
 ```
 
-## Good to know
+## Limitations (reported as such)
 
 - The simulators are teaching models: they show *why* a design is faster, and their cycle counts are model
   numbers, not measurements of a real chip.
@@ -113,6 +113,6 @@ tests/          automatic checks that keep every example correct
 - The Verilog CPUs run in simulation (Icarus Verilog); they have not been put on an FPGA board.
 - OpenMP, MPI and CUDA programs need those toolchains (CUDA also an NVIDIA GPU, e.g. Google Colab).
 
-## License
+## Author and license
 
-MIT ([LICENSE](LICENSE)). George David Tsitlauri, University of Thessaly.
+George David Tsitlauri, Department of Informatics and Telecommunications, University of Thessaly, Greece. MIT license ([LICENSE](LICENSE)).
