@@ -1,7 +1,7 @@
 # Study guides
 
 One guide per course: the theory of each topic, a picture, a small program that shows it running, and the
-code that implements it. The [glossary](GLOSSARY.md) gives every term in Greek and English.
+code that implements it. The [glossary](GLOSSARY.md) explains the terms.
 
 Read [the connected flow](../FLOW.md) to see why the six subjects belong together: one computation passes
 through all of them. Every guide also ends with a section **How this course connects**.
