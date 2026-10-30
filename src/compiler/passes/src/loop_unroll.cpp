@@ -163,6 +163,28 @@ std::optional<CountedLoopInfo> detect_supported_loop(const ir::Function& functio
     if (info.step != 0) {
       return info;
     }
+    // The first local found may be the bound (as in `n > i`): try the other operand of the comparison.
+    for (const auto& instruction : cond_block.instructions) {
+      if (instruction.result != info.condition_value || instruction.kind != ir::InstructionKind::Binary) {
+        continue;
+      }
+      for (const ir::ValueId operand : instruction.operands) {
+        for (const auto& candidate : cond_block.instructions) {
+          if (candidate.kind != ir::InstructionKind::LoadLocal || candidate.result != operand ||
+              candidate.local == info.induction_local) {
+            continue;
+          }
+          const auto step = detect_step_constant(body_block, candidate.local);
+          if (step.value_or(0) != 0) {
+            info.induction_local = candidate.local;
+            info.init_constant = detect_init_constant(function.blocks[preheader], candidate.local);
+            info.limit_constant = detect_limit_constant(cond_block, info.condition_value, candidate.local);
+            info.step = *step;
+            return info;
+          }
+        }
+      }
+    }
   }
   return std::nullopt;
 }
@@ -322,14 +344,155 @@ bool apply_symbolic_unroll(ir::Function& function, std::vector<std::string>& not
   return true;
 }
 
+ir::BinaryOp mirrored(ir::BinaryOp op) {
+  switch (op) {
+    case ir::BinaryOp::Less: return ir::BinaryOp::Greater;
+    case ir::BinaryOp::LessEqual: return ir::BinaryOp::GreaterEqual;
+    case ir::BinaryOp::Greater: return ir::BinaryOp::Less;
+    case ir::BinaryOp::GreaterEqual: return ir::BinaryOp::LessEqual;
+    default: return op;
+  }
+}
+
+bool apply_remainder_unroll(ir::Function& function, std::size_t factor, std::vector<std::string>& notes) {
+  const auto loop = detect_supported_loop(function);
+  if (!loop.has_value()) {
+    notes.push_back("remainder unroll: no supported counted loop found");
+    return false;
+  }
+  if (factor < 2) {
+    notes.push_back("remainder unroll: the factor must be at least 2");
+    return false;
+  }
+  const auto& cond_block = function.blocks[loop->cond];
+  const auto& body_block = function.blocks[loop->body];
+  // The comparison and the side of the induction variable.
+  const ir::Instruction* compare = nullptr;
+  for (const auto& instruction : cond_block.instructions) {
+    if (instruction.result == loop->condition_value && instruction.kind == ir::InstructionKind::Binary) {
+      compare = &instruction;
+    }
+  }
+  std::optional<ir::ValueId> iv_load;
+  for (const auto& instruction : cond_block.instructions) {
+    if (instruction.kind == ir::InstructionKind::LoadLocal && instruction.local == loop->induction_local) {
+      iv_load = instruction.result;
+    }
+  }
+  if (compare == nullptr || !iv_load || compare->operands.size() != 2) {
+    notes.push_back("remainder unroll: unsupported loop condition");
+    return false;
+  }
+  const bool iv_left = compare->operands[0] == *iv_load;
+  if (!iv_left && compare->operands[1] != *iv_load) {
+    notes.push_back("remainder unroll: the condition does not compare the induction variable directly");
+    return false;
+  }
+  const ir::BinaryOp relation = iv_left ? compare->binary_op : mirrored(compare->binary_op);
+  const bool upward = (relation == ir::BinaryOp::Less || relation == ir::BinaryOp::LessEqual) && loop->step > 0;
+  const bool downward = (relation == ir::BinaryOp::Greater || relation == ir::BinaryOp::GreaterEqual) && loop->step < 0;
+  if (!upward && !downward) {
+    notes.push_back("remainder unroll: the induction variable must move towards the bound (i < n with i += s, "
+                    "or i > n with i -= s)");
+    return false;
+  }
+  // The bound must be loop-invariant: no local read by the condition (other than i) is written in the body,
+  // and the body writes i exactly once.
+  std::size_t iv_stores = 0;
+  for (const auto& instruction : body_block.instructions) {
+    if (instruction.kind != ir::InstructionKind::StoreLocal) continue;
+    if (instruction.local == loop->induction_local) {
+      ++iv_stores;
+      continue;
+    }
+    for (const auto& read : cond_block.instructions) {
+      if (read.kind == ir::InstructionKind::LoadLocal && read.local == instruction.local) {
+        notes.push_back("remainder unroll: the loop bound changes inside the body");
+        return false;
+      }
+    }
+  }
+  if (iv_stores != 1) {
+    notes.push_back("remainder unroll: the body must update the induction variable exactly once");
+    return false;
+  }
+
+  const auto original_cond = function.blocks[loop->cond];
+  const auto original_body = function.blocks[loop->body];
+  const auto iv = *iv_load;
+  const auto condition_value = loop->condition_value;
+  const auto cond_id = loop->cond;
+  const auto preheader_id = loop->preheader;
+  const std::int64_t step = loop->step;
+  const ir::BlockId main_cond_id = function.blocks.size();
+  function.blocks.push_back(ir::BasicBlock{.id = main_cond_id, .label = "while.main.check"});
+  const ir::BlockId main_body_id = function.blocks.size();
+  function.blocks.push_back(ir::BasicBlock{.id = main_body_id, .label = "while.main.body"});
+
+  // Main condition: the original test applied to i + (K-1)*step.
+  ir::BasicBlock scratch;
+  const auto cond_clone = clone_instructions_into(function, function, original_cond, scratch);
+  const ir::ValueId cloned_iv = cond_clone.value_map.at(iv);
+  const ir::ValueId cloned_compare = cond_clone.value_map.at(condition_value);
+  const ir::ValueId offset_value = function.values.size();
+  function.values.push_back(ir::ValueInfo{.id = offset_value, .type = ir::Type{}});
+  const ir::ValueId shifted_value = function.values.size();
+  function.values.push_back(ir::ValueInfo{.id = shifted_value, .type = ir::Type{}});
+  std::vector<ir::Instruction> main_cond;
+  for (auto instruction : scratch.instructions) {
+    if (instruction.result == cloned_compare) {
+      for (auto& operand : instruction.operands) {
+        if (operand == cloned_iv) operand = shifted_value;
+      }
+    }
+    const bool is_iv = instruction.result == cloned_iv;
+    main_cond.push_back(std::move(instruction));
+    if (is_iv) {
+      main_cond.push_back(ir::Instruction{.kind = ir::InstructionKind::ConstInt, .result = offset_value,
+                                          .int_immediate = static_cast<std::int64_t>(factor - 1) * step});
+      main_cond.push_back(ir::Instruction{.kind = ir::InstructionKind::Binary, .result = shifted_value,
+                                          .binary_op = ir::BinaryOp::Add, .operands = {cloned_iv, offset_value}});
+    }
+  }
+  function.blocks[main_cond_id].instructions = std::move(main_cond);
+  function.blocks[main_cond_id].terminator = ir::Terminator{
+      .kind = ir::TerminatorKind::Branch, .condition = cloned_compare, .true_target = main_body_id,
+      .false_target = cond_id};
+
+  // Main body: K guard-free copies of the body.
+  std::vector<ir::Instruction> copies;
+  for (std::size_t copy = 0; copy < factor; ++copy) {
+    ir::BasicBlock part;
+    clone_instructions_into(function, function, original_body, part);
+    copies.insert(copies.end(), part.instructions.begin(), part.instructions.end());
+  }
+  function.blocks[main_body_id].instructions = std::move(copies);
+  function.blocks[main_body_id].terminator =
+      ir::Terminator{.kind = ir::TerminatorKind::Jump, .true_target = main_cond_id};
+
+  // The preheader enters the main loop; the original loop runs the remaining iterations.
+  auto& preheader = function.blocks[preheader_id];
+  if (preheader.terminator->true_target == cond_id) preheader.terminator->true_target = main_cond_id;
+  if (preheader.terminator->false_target == cond_id) preheader.terminator->false_target = main_cond_id;
+
+  const std::int64_t reach = static_cast<std::int64_t>(factor - 1) * (step > 0 ? step : -step);
+  notes.push_back("remainder unroll: factor " + std::to_string(factor) + "; the main loop runs " +
+                  std::to_string(factor) + " copies of the body while i " + (step > 0 ? "+ " : "- ") +
+                  std::to_string(reach) + " still passes the test, the original loop runs the remaining iterations");
+  return true;
+}
+
 }  // namespace
 
-LoopUnrollResult unroll_loops(const ir::Module& module, LoopUnrollMode mode) {
+LoopUnrollResult unroll_loops(const ir::Module& module, LoopUnrollMode mode, std::size_t factor) {
   LoopUnrollResult result{.module = module};
   for (auto& function : result.module.functions) {
-    const bool changed = mode == LoopUnrollMode::Concrete
-        ? apply_concrete_unroll(function, result.notes)
-        : apply_symbolic_unroll(function, result.notes);
+    bool changed = false;
+    switch (mode) {
+      case LoopUnrollMode::Concrete: changed = apply_concrete_unroll(function, result.notes); break;
+      case LoopUnrollMode::Symbolic: changed = apply_symbolic_unroll(function, result.notes); break;
+      case LoopUnrollMode::SymbolicRemainder: changed = apply_remainder_unroll(function, factor, result.notes); break;
+    }
     if (changed) {
       ++result.transformed_loops;
     }

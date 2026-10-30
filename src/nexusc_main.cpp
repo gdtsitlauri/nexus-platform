@@ -66,6 +66,7 @@ void print_usage(std::ostream& stream) {
          << "  nexusc experimental-parse <file> --mode parallel|bison-lr\n"
          << "  nexusc opt <file> --analysis symbolic|region-liveness|affine|alias|interproc\n"
          << "  nexusc opt <file> --pass unroll|unroll-symbolic|strip-mine|interproc-constfold\n"
+         << "  nexusc opt <file> --pass unroll-remainder [--factor K]\n"
          << "  nexusc compile <file> -S [-o out.s]\n"
          << "  nexusc compile <file> -S --regalloc none|linear-scan [-o out.s]\n"
          << "  nexusc compile <file> --emit-ir\n"
@@ -373,6 +374,7 @@ int run_experimental_parse(const LoadedSource& loaded_source, const std::string&
 struct OptOptions {
   std::optional<std::string> analysis;
   std::optional<std::string> pass;
+  std::size_t factor = 4;
 };
 
 int run_opt(const LoadedSource& loaded_source, const OptOptions& options) {
@@ -405,6 +407,16 @@ int run_opt(const LoadedSource& loaded_source, const OptOptions& options) {
       std::cout << "; " << note << '\n';
     }
     return 0;
+  }
+
+  if (*options.pass == "unroll-remainder") {
+    const auto unrolled = nexus::compiler::passes::unroll_loops(
+        *module, nexus::compiler::passes::LoopUnrollMode::SymbolicRemainder, options.factor);
+    std::cout << nexus::compiler::ir::print_module(unrolled.module);
+    for (const auto& note : unrolled.notes) {
+      std::cout << "; " << note << '\n';
+    }
+    return unrolled.transformed_loops > 0 ? 0 : 2;
   }
 
   if (*options.pass == "strip-mine") {
@@ -939,6 +951,10 @@ int main(int argc, char** argv) {
         } else {
           options.pass = argv[++index];
         }
+        continue;
+      }
+      if (option == "--factor" && index + 1 < argc) {
+        options.factor = static_cast<std::size_t>(std::stoul(argv[++index]));
         continue;
       }
       std::cerr << "error: unknown opt option '" << option << "'\n";

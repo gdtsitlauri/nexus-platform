@@ -402,3 +402,20 @@ nexus_apply_project_options(nexus_lp_schedule_test)
 nexus_set_warnings(nexus_lp_schedule_test)
 nexus_enable_sanitizers(nexus_lp_schedule_test)
 add_test(NAME nexus_lp_schedule_test COMMAND $<TARGET_FILE:nexus_lp_schedule_test> "${PROJECT_SOURCE_DIR}")
+
+add_executable(nexus_remainder_unroll_test remainder_unroll_test.cpp)
+target_link_libraries(
+  nexus_remainder_unroll_test
+  PRIVATE
+    nexus_frontend
+    nexus_semantics
+    nexus_ir
+    nexus_passes
+    nexus_backend_mips
+    nexus_mips_assembler
+    nexus_mips_loader
+    nexus_sim_functional)
+nexus_apply_project_options(nexus_remainder_unroll_test)
+nexus_set_warnings(nexus_remainder_unroll_test)
+nexus_enable_sanitizers(nexus_remainder_unroll_test)
+add_test(NAME nexus_remainder_unroll_test COMMAND $<TARGET_FILE:nexus_remainder_unroll_test>)
