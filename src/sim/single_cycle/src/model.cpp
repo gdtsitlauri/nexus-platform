@@ -33,7 +33,7 @@ std::int32_t& reg(State& state, Register reg) {
   return state.regs[mips::isa::register_index(reg)];
 }
 
-// the console/UART registers of the NEXUS memory map: same addresses in every model and in the SoC
+// the console/UART registers of the NEXUS memory map: same addresses in every model and in the Verilog I/O devices
 constexpr std::int32_t kConsoleData = 0x00010000;
 constexpr std::int32_t kConsoleStatus = 0x00010004;
 

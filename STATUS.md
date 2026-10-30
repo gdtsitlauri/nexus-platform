@@ -2,22 +2,32 @@
 
 ## Snapshot
 
-- Version: 2.0.0 (2026-10-14); 1.0.0 was released on 2026-10-05
-- Scope: every topic of the ten course outlines in `docs/course_outlines/` is implemented as code
-  with an automated test, except three reading/history topics (see
-  `docs/reports/full_syllabus_checklist.md`)
-- Build: CMake + Ninja, C++20; verified with Clang 22 (zig toolchain) on Windows 11
-- Tests: 78 CTest tests on Windows with Icarus Verilog, Yosys and nextpnr installed; skipped there:
-  `nexus_toolchain_compare` (needs `clang`) and `nexus_posix_lab` (needs a POSIX system); the OpenMP
-  and MPI benchmark tests are not registered when those toolchains are absent
-- Colab (Tesla T4, CUDA 13.0, GCC 13.3, OpenMPI, Yosys): 68 CTest tests including OpenMP, MPI, the
-  bench wrapper and the CUDA demo; 66 passed, 1 skipped (clang), 1 failed (type printing, fixed below and
-  re-verified with Clang) (`results/colab/`)
-- Colab, version 2.0.0 (Linux, GCC, no GPU): 81 CTest tests, 79 passed, 2 skipped (clang, nextpnr),
-  including the full flow, the POSIX lab, OpenMP, MPI and the type-inference fix
-  (`results/colab/linux_gcc_2.0.0.md`)
-- HDL: Icarus Verilog for the testbench suites, the RTL co-simulation and the SoC; Yosys for synthesis
-  and equivalence proofs; nextpnr-ecp5 and ecppack for the FPGA flow
+- Version: 3.0.0 (2026-10-30); 2.0.0 was released on 2026-10-14, 1.0.0 on 2026-10-05
+- Scope: the six course outlines in `docs/course_outlines/` (NEY613, NEY709, NEY221, EY321, NEY606,
+  NEY704); every topic is implemented as code with an automated test, except history, taxonomy and
+  reading-list topics, which are notes (see `docs/reports/full_syllabus_checklist.md`)
+- Build: CMake 4.4 + Ninja, C++20; verified with Clang (zig 0.17 toolchain) on Windows 11
+- Tests: 73 CTest tests on Windows with Icarus Verilog and Yosys (OSS CAD Suite) installed: 72 passed,
+  1 skipped (`nexus_toolchain_compare`, needs `clang` on the PATH); the OpenMP and MPI benchmark tests are
+  not registered when those toolchains are absent
+- Colab runs (Tesla T4 with CUDA, and Linux/GCC) were made with version 2.0.0 and are kept in
+  `results/colab/`; they include tests of the four courses that 3.0.0 removed
+- HDL: Icarus Verilog for the testbench suites, the RTL co-simulation and the I/O system; Yosys for synthesis
+
+## What 3.0.0 Changed
+
+| area | change | test |
+| --- | --- | --- |
+| scope | the project now covers six courses; Embedded Systems (NEY604), VLSI Design (NEY705), Logic Design (EY121) and Operating Systems (EY517) were removed with their code, tests, docs and outlines | - |
+| the flow | one program through the six courses: compiler, SSA/SCCP, MIPS32 machine code, every CPU model, the Verilog CPU with a polled console and a timer interrupt on its I/O bus | `nexus_full_flow` |
+| NEY613 | hash tables and symbol tables, tree traversals, DFS/BFS, topological order, SCCs, transitive closure | `nexus_foundations_test` |
+| NEY613 | attribute grammars with inherited attributes: dependency graphs, L-attributed test, one-pass evaluation | `nexus_attribute_grammar_test` |
+| NEY709 | polyhedral transformations by linear programming: exact simplex, branch and bound, hyperplane schedules | `nexus_lp_schedule_test` |
+| NEY709 | symbolic unrolling by any factor with a remainder loop; loop detection for `while (n > i)` | `nexus_remainder_unroll_test` |
+| EY321 | console and timer devices on the Verilog CPU's I/O bus | `nexus_full_flow` |
+| NEY606 | software pipelining by iterative modulo scheduling | `nexus_modulo_schedule_test` |
+| NEY704 | coarse-grained, fine-grained and simultaneous multithreading | `nexus_multithreading_test` |
+| NEY704 | vector processor with strip-mining, chaining, lanes and strided access | `nexus_vector_test` |
 
 ## What 2.0.0 Added Over 1.0.0
 

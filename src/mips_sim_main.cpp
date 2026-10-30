@@ -411,7 +411,7 @@ int main(int argc, char** argv) {
     std::cerr << "entry " << loaded.program->entry_point << " words " << encoded.words.size() << '\n';
     const auto handler = loaded.program->labels.find("interrupt_handler");
     if (handler != loaded.program->labels.end()) {
-      std::cerr << "handler " << handler->second << '\n';  // for the SoC's interrupt vector
+      std::cerr << "handler " << handler->second << '\n';  // for the interrupt vector of the Verilog CPU
     }
     return 0;
   }

@@ -26,7 +26,7 @@ struct State {
 
 constexpr std::int32_t kHaltReturnAddress = std::numeric_limits<std::int32_t>::min();
 constexpr std::size_t kStackGuardWords = 16;
-// the console/UART registers of the NEXUS memory map: same addresses in the pipeline model and the SoC
+// the console/UART registers of the NEXUS memory map: same addresses in the pipeline model and the Verilog I/O devices
 constexpr std::int32_t kConsoleData = 0x00010000;
 constexpr std::int32_t kConsoleStatus = 0x00010004;
 

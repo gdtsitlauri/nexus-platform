@@ -1,22 +1,22 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
-title: "NEXUS: a compiler, CPU simulators, parallel and GPU models, a Verilog MIPS SoC and logic, VLSI and operating-system tools covering ten computer-systems courses"
+title: "NEXUS: a compiler, CPU simulators, parallel, vector and GPU models and a Verilog MIPS CPU covering six computer-systems courses"
 type: software
-version: 2.0.0
+version: 3.0.0
 authors:
   - given-names: "George David"
     family-names: "Tsitlauri"
     affiliation: "Department of Informatics and Telecommunications, University of Thessaly, Greece"
-date-released: 2026-10-14
+date-released: 2026-10-30
 license: MIT
 repository-code: "https://github.com/gdtsitlauri/nexus-platform"
 abstract: >-
-  A C++20 and Verilog project covering ten computer-systems courses with executable, tested code: a
-  NexusLang-to-MIPS compiler with linear-scan register allocation, SSA/SCCP and polyhedral loop
-  transformations; automata, LL/LR/Earley parsing and Hindley-Milner type inference; MIPS execution
-  models from a functional interpreter to a Tomasulo core with reorder buffer and SMT; multicore,
-  network-on-chip and SIMT GPU models; bit-exact IEEE-754 soft float; and a synthesisable 5-stage
-  pipelined MIPS core co-simulated against the simulators, inside a SoC taken to an FPGA bitstream;
-  logic-design and VLSI/EDA tools (minimisation, BDD, SAT, FSM synthesis, switch-level CMOS, technology
-  mapping, timing, placement, routing, ATPG); and operating-system algorithms with a model checker.
-keywords: [compilers, computer architecture, MIPS, simulation, Tomasulo, polyhedral, Verilog, logic design, VLSI, EDA, operating systems, embedded systems, education]
+  Supporting material for six computer-systems courses, as executable and tested C++20 and Verilog code:
+  a NexusLang-to-MIPS compiler with linear-scan register allocation, attribute grammars, SSA/SCCP, loop
+  unrolling and polyhedral transformations by integer linear programming; automata, LL/LR/Earley parsing and
+  Hindley-Milner type inference; ISA styles and bit-exact IEEE-754 soft float; MIPS execution models from a
+  functional interpreter to a Tomasulo core with reorder buffer, software pipelining by modulo scheduling,
+  coarse-grained, fine-grained and simultaneous multithreading, multicore, network-on-chip, vector and SIMT
+  GPU models; and a synthesisable 5-stage pipelined MIPS core with memory-mapped I/O and interrupts,
+  co-simulated against the simulators.
+keywords: [compilers, computer architecture, MIPS, simulation, Tomasulo, polyhedral, linear programming, software pipelining, multithreading, vector processors, Verilog, education]

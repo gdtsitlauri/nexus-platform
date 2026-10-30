@@ -1,5 +1,31 @@
 # Changelog
 
+## [3.0.0] - 2026-10-30
+
+The project now covers six courses (NEY613 Compilers, NEY709 Advanced Compiler Topics, NEY221 Principles of
+Computer Operation, EY321 Computer Organization, NEY606 Computer Architecture, NEY704 Parallel Systems) and
+fills the topics of their outlines that 2.0.0 covered only partly.
+
+- Removed: Embedded Systems (NEY604), VLSI Design (NEY705), Logic Design (EY121) and Operating Systems (EY517)
+  with their code (`src/logic`, `src/vlsi`, `src/os`, `src/embedded`, `src/hdl/soc`, `src/hdl/logic`), the
+  `nexus-eda`, `nexus-os` and `nexus-embedded` tools, their tests, examples, docs and outlines
+- The flow (`scripts/nexus_flow.py`, `docs/FLOW.md`): one program through the six courses; on the Verilog CPU
+  it polls a console on the I/O bus and a timer interrupt is checked against the pipeline simulator
+- EY321: `nexus_io_devices.v` (polled console, timer interrupt, bus address decoder) and `cpu_io_tb.v`
+- NEY613: hash tables, block-scoped symbol table, tree traversals, DFS with edge classification, BFS,
+  Kahn's topological sort, Tarjan's SCCs, Warshall's closure, worklist closure (`nexusc graph|tree|hash`);
+  attribute grammars with inherited attributes, dependency graphs, cycle detection, the L-attributed test and
+  one-pass evaluation (`nexusc attr`)
+- NEY709: exact rational simplex, branch-and-bound integer programming, unimodular completion and hyperplane
+  schedules (`nexusc poly <file> schedule`); symbolic unrolling by any factor with a remainder loop
+  (`nexusc opt --pass unroll-remainder --factor K`); loop detection now finds the induction variable when the
+  bound is the left operand
+- NEY606: software pipelining by iterative modulo scheduling (`nexusc modsched`)
+- NEY704: coarse-grained, fine-grained and simultaneous multithreading (`mips-sim mt`); a vector processor
+  with strip-mining, chaining, lanes, strided access and the convoy/chime model (`mips-sim vector`)
+- The functional simulator can record executed instructions with their load/store addresses for
+  trace-driven models (`RunOptions::record_events`)
+
 ## [2.0.0] - 2026-10-14
 
 Four more course outlines covered (EY121 Logic Design, EY517 Operating Systems, NEY604 Embedded Systems

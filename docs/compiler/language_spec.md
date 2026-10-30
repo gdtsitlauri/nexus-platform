@@ -21,7 +21,7 @@ concerns.
 - assignment statements to identifiers or array elements
 - recursion through function calls
 - one built-in function, `putc(c: int) -> int`, which writes the byte `c` to the console/UART at
-  address 0x10000 of the NEXUS memory map (every CPU model and the Verilog SoC share it) and
+  address 0x10000 of the NEXUS memory map (every CPU model and the Verilog CPU's console device share it) and
   returns `c`; a program may define its own `putc` instead. Only the MIPS back end supports it.
 
 ## Lexical Structure

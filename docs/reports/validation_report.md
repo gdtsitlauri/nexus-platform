@@ -1,12 +1,12 @@
-# Validation Report (version 2.0.0)
+# Validation Report (version 3.0.0)
 
 ## Environment
 
-- Date: 2026-10-14 (version 2.0.0; the 1.0.0 run was on 2026-10-05)
-- Host: Windows 11 Pro, 12-core CPU
-- Toolchain: CMake 3.30.5, Ninja 1.12.1, Clang 22 (zig c++), win_flex/win_bison 2.5.25, Python 3.12,
-  Icarus Verilog, Yosys, nextpnr-ecp5 and ecppack from the OSS CAD Suite
-- Build: `cmake -S . -B build -G Ninja && cmake --build build` (150 targets, no errors)
+- Date: 2026-10-30 (version 3.0.0; the 2.0.0 run was on 2026-10-14, 1.0.0 on 2026-10-05)
+- Host: Windows 11 Pro, AMD Ryzen 5 5600H
+- Toolchain: CMake 4.4.4, Ninja 1.13.2, Clang (zig 0.17 c++), win_flex/win_bison 2.5.25, Python 3.13,
+  Icarus Verilog and Yosys from the OSS CAD Suite (2026-10-14)
+- Build: `cmake -S . -B build -G Ninja && cmake --build build` (no errors)
 
 ## Full Suite
 
@@ -14,11 +14,9 @@
 cd build && ctest --output-on-failure -j8
 ```
 
-78 tests: 76 passed, 2 skipped (`nexus_toolchain_compare`, `clang` not in PATH; `nexus_posix_lab`, not a
-POSIX system). The new code builds without warnings under `-Wall -Wextra -Wconversion
--Wsign-conversion`. The OpenMP and MPI
-benchmark tests are not registered on this host because no OpenMP-capable compiler and no `mpicxx`
-were found; `nexus_gpu_optional` passes through its CUDA-disabled path.
+73 tests: 72 passed, 1 skipped (`nexus_toolchain_compare`, `clang` not in PATH). The OpenMP and MPI benchmark
+tests are not registered on this host because no OpenMP-capable compiler and no `mpicxx` were found;
+`nexus_gpu_optional` passes through its CUDA-disabled path.
 
 ## Cross-Checks Against Independent References
 
@@ -36,26 +34,16 @@ were found; `nexus_gpu_optional` passes through its CUDA-disabled path.
 | Fourier-Motzkin dependence tests | enumeration of the concrete domain | 120 random nests | no missed dependence |
 | SIMT kernels | closed form and warp size 1 | 64-96 threads | equal |
 | SPMD reduction | closed form | 1-64 cores x 5 networks | equal |
-| NAND/NOR-only rewriting, BDD canonicity and model counts | truth tables | 300 + 200 random expressions | equal |
-| CDCL SAT solver | brute-force enumeration | 300 random 3-SAT formulas | equal |
-| PLA row minimisation | brute-force search over all cubes; truth tables | 20 + 80 random multi-output functions | minimal and correct |
-| Hamming SEC decoding | every single-bit error | 40 random words per size | all corrected |
-| FSM minimisation | product-machine equivalence | 120 random machines | equivalent and minimal |
-| synthesised FSM Verilog (behavioural and structural) | state-table simulation in Icarus Verilog | 2 machines x 4 encodings/flip-flops, 64 random inputs | equal |
-| logical-effort path sizing | numerical optimisation | 20 random paths | equal (1e-5) |
-| static CMOS complex gates | exhaustive switch-level simulation | 60 random pull-down networks | complementary, correct function |
-| technology mapping | SAT miter; Yosys `sat -prove` on c17 and the control unit | 25 random circuits + 2 designs | proved equivalent |
-| static timing | path enumeration | 25 random circuits | equal |
-| stuck-at faults | random patterns + SAT ATPG | 6 random circuits | every fault detected or proved redundant |
-| A* routing | Lee wave expansion | 40 random grids | same optimal cost, fewer expansions |
-| Steiner trees | exact RSMT | 30 random nets | RSMT <= 1-Steiner <= MST <= 1.5 RSMT |
-| SRT / SPN scheduling | other policies; exhaustive non-preemptive optimum | 200 random workloads | SRT minimal, SPN optimal |
-| Banker's safety | enumeration of all orders | 300 random states | equal |
-| page replacement | OPT lower bound, LRU stack property | 200 random strings | hold |
-| response-time analysis, EDF test | simulation over the hyperperiod | 400 random task sets | equal |
-| SoC programs | C++ pipeline model, RTL, gate-level netlist | 3 programs | identical exit codes, UART text, interrupt counts |
-| the full flow (`nexus_full_flow`) | one compiled program on 10 CPU models x 2 allocators, SoC RTL, gate level; control unit mapped and proved; kernel vs RR Gantt | 1 program, 1 kernel | identical UART text and exit code; dispatch order = Gantt chart |
-| ECP5 bitstream | read back with ecpunpack (device ID, 13294 frames, DONE) | 1 design | valid |
+| hash table | `std::unordered_map` | 20,000 random operations | equal |
+| Warshall closure, Tarjan SCCs, Kahn order | worklist reachability, mutual reachability | 200 random graphs | equal |
+| attribute grammars | direct binary conversion; dependency-graph evaluation | 500 random binary numbers; declarations | equal; one-pass = graph on L-attributed grammars |
+| simplex and branch and bound | exhaustive search | 150 random integer programs + 4 textbook LPs | equal |
+| hyperplane schedules (ILP) | brute force over small integer vectors; execution of the transformed nest | 120 random dependence sets; 4 nests | equal optimum; legal and verified |
+| symbolic unrolling with a remainder loop | the original loop, compiled and run | 160 random loops | equal results |
+| modulo schedules | every dependence and resource constraint | 2 examples + 400 random loop bodies | all valid; II = MII in 396/400 |
+| vector processor | scalar DAXPY; convoy counts | n = 1-257, 1-4 lanes | equal results; 3 (chained) / 4 convoys per strip |
+| multithreading policies | functional exit codes; one-thread equality | 1-4 threads, 2 miss penalties | equal results; textbook trade-off |
+| the full flow (`nexus_full_flow`) | one compiled program on 10 CPU models x 2 allocators and on the Verilog CPU with its console; a timer interrupt on the Verilog CPU vs the pipeline simulator | 1 program + 1 interrupt program | identical console text, exit codes and interrupt count |
 
 ## Linux / GCC Run of Version 2.0.0 (Google Colab, 2026-10-14)
 

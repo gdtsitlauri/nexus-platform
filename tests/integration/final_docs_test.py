@@ -52,7 +52,7 @@ def check_reports(root: Path) -> None:
                 require(any(test.startswith(name[:-1]) for test in tests), f"no test matches {name}")
             else:
                 require(name in tests, f"checklist cites unknown test {name}")
-    require(rows >= 130, f"checklist has too few rows ({rows})")
+    require(rows >= 85, f"checklist has too few rows ({rows})")
     require("still outside" not in checklist.lower(), "a topic is still marked as outside the project")
 
     for relative in (
@@ -72,10 +72,10 @@ def check_final(root: Path) -> None:
     architecture = read(root / "ARCHITECTURE.md")
     changelog = read(root / "CHANGELOG.md")
 
-    require("2.0.0" in status, "STATUS.md does not reflect version 2.0.0")
-    require("2.0.0" in readme, "README.md missing version 2.0.0")
+    require("3.0.0" in status, "STATUS.md does not reflect version 3.0.0")
+    require("3.0.0" in readme, "README.md missing version 3.0.0")
     require("HDL" in architecture, "ARCHITECTURE.md missing HDL coverage")
-    require("[2.0.0]" in changelog, "CHANGELOG.md missing the 2.0.0 entry")
+    require("[3.0.0]" in changelog, "CHANGELOG.md missing the 3.0.0 entry")
 
     for relative in (
         "CITATION.cff",
@@ -98,6 +98,11 @@ def check_final(root: Path) -> None:
         "docs/FLOW.md",
         "examples/flow/flow_demo.nx",
         "scripts/nexus_flow.py",
+        "src/hdl/cpu_pipeline/nexus_io_devices.v",
+        "examples/vector/daxpy.vasm",
+        "examples/schedules/daxpy.ddg",
+        "examples/multithreading/stream.s",
+        "examples/graphs/loop_nest.graph",
     ):
         require((root / relative).exists(), f"missing final artifact: {relative}")
 
