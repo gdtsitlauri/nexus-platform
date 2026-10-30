@@ -9,8 +9,7 @@ examples. Start with short programs and hand calculations, then inspect the rele
 implementation. The simulators deliberately simplify hardware; each guide identifies the important limits.
 
 For the whole picture, read [one computation through all six courses](docs/FLOW.md).
-For a particular topic, choose its course below. [Using the material](docs/STUDYING.md) connects
-the theory, its meaning and the implementation code; further applications remain optional reading.
+For a particular topic, choose its course below.
 
 ## Start here: pick your course
 

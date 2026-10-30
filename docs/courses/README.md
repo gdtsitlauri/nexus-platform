@@ -8,6 +8,9 @@ through all of them. Every guide also ends with a section **How this course conn
 
 ## How to read one topic
 
+Five questions explain any mechanism: **why** it exists, **what state** it keeps, **what changes** that state,
+**what must stay true**, and **what it costs** (cycles, memory traffic, communication, code size).
+
 1. Read the explanation and the picture: what problem does the mechanism solve, and what state does it keep?
 2. Run the small example and compare its output with the explanation.
 3. Read the shown code fragment, then the named function in the implementation.

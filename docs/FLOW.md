@@ -246,4 +246,3 @@ The [predication model](../examples/basics/predication.py) explains guarded effe
 [points-to solver](../examples/basics/compiler/points_to.py) explains pointer information used to
 reason about memory dependencies. They are separate small models, not added MIPS instructions or
 a new pointer language in the NexusLang compiler.
-How to read a mechanism together with its code: [studying with NEXUS](STUDYING.md).
