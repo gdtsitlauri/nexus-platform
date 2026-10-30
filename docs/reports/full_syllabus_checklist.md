@@ -1,4 +1,4 @@
-# Full Syllabus Checklist (version 3.0.0)
+# Full Syllabus Checklist (version 3.1.0)
 
 Every topic of the six course outlines in `docs/course_outlines/` mapped to the code that implements
 it and the automated test that checks it. Test names are CTest names (`ctest -R <name>`).
@@ -41,9 +41,12 @@ No topic of the six outlines is left outside the project.
 | datapath and control, micro-operations | implemented and tested | `src/sim/single_cycle/`, `src/sim/multi_cycle/` | `nexus_single_cycle_model_test`, `nexus_multi_cycle_model_test` |
 | hardwired control | implemented and tested | single/multi-cycle control, `src/hdl/control/` | `nexus_multi_cycle_model_test`, `nexus_hdl_control` |
 | microprogrammed control | implemented and tested | multi-cycle `--control microcode` | `nexus_multi_cycle_model_test` |
+| hardwired and microprogrammed control in hardware | implemented, toolchain-dependent | `src/hdl/cpu_multicycle/nexus_mips_multicycle.v` (MICROCODE=0 FSM, MICROCODE=1 control store) | `nexus_hdl_multicycle_cosim` (needs Icarus Verilog) |
 | pipelining, hazards, forwarding, stalls | implemented and tested | `src/sim/pipeline/` | `nexus_pipeline_model_test`, `nexus_cross_model_differential` |
 | branch prediction | implemented and tested | static predictors (pipeline), 2-bit (advanced) | `nexus_advanced_predictor_test` |
+| branch prediction in hardware | implemented, toolchain-dependent | `nexus_mips_pipeline.v` PREDICT=1 (static) and 2 (two-bit counters) | `nexus_hdl_branch_prediction` (needs Icarus Verilog) |
 | memory hierarchy, L1 + L2 caches | implemented and tested | `src/sim/memory/` | `nexus_memory_cache_test`, `nexus_pipeline_memory_system_test` |
+| main and secondary memory: virtual memory, TLB, page replacement, disk | implemented and tested | `src/sim/memory/src/virtual_memory.cpp` (`mips-sim vm`) | `nexus_memory_hierarchy_test` |
 | I/O, buses, interrupts, DMA | implemented and tested | `src/sim/io/` | `nexus_io_system_test` |
 | I/O devices on the CPU's bus in hardware: polled console, timer interrupt | implemented, toolchain-dependent | `src/hdl/cpu_pipeline/nexus_io_devices.v`, `cpu_io_tb.v` | `nexus_full_flow` (needs Icarus Verilog; same console text and interrupt result as the simulator) |
 | performance evaluation (CPI, IPC, speedup) | implemented and tested | `--stats` on every model, `scripts/run_benchmarks.py` | `nexus_phase7_benchmarks` |
@@ -87,6 +90,7 @@ No topic of the six outlines is left outside the project.
 | software pipelining (modulo scheduling) for static scheduling | implemented and tested | `src/compiler/passes/src/modulo_schedule.cpp`: ResMII, RecMII, iterative modulo scheduling (`nexusc modsched`) | `nexus_modulo_schedule_test` |
 | branch prediction, speculation, reorder buffer, return-address stack | implemented and tested | 2-bit predictor, ROB with in-order commit, RAS | `nexus_tomasulo_test` |
 | memory and peripherals | implemented and tested | caches, I/O, DMA | `nexus_pipeline_memory_system_test`, `nexus_io_system_test` |
+| advanced memory organisation: non-blocking caches, prefetching | implemented and tested | `src/sim/memory/src/nonblocking_cache.cpp` (`mips-sim cache`) | `nexus_memory_hierarchy_test` |
 | multiprocessors: coherence, consistency, synchronisation | implemented and tested | `src/sim/parallel/` | `nexus_coherence_test`, `nexus_consistency_test`, `nexus_parallel_model_test` |
 | literature study | notes | `docs/literature/architecture_readings.md` | `nexus_literature_docs` |
 
@@ -121,6 +125,7 @@ No topic of the six outlines is left outside the project.
 | coarse-grained and fine-grained multithreading | implemented and tested | `src/sim/advanced/src/multithreading.cpp` (`mips-sim mt` with the single, coarse, fine and smt policies) | `nexus_multithreading_test` |
 | shared-memory multiprocessors | implemented and tested | `--mode parallel`, SPMD `worker` entry for any core count | `nexus_parallel_model_test`, `nexus_manycore` |
 | distributed memory, message passing (MPI) | implemented, toolchain-dependent | `benchmarks/mpi/mpi_bench.cpp` | `nexus_mpi_benchmark` (needs `mpicxx`; passed on Colab, `results/colab/`) |
+| distributed-memory systems: message passing, collectives, network topologies | implemented and tested | `src/sim/parallel/src/message_passing.cpp` (`mips-sim msg`) | `nexus_message_passing_test` |
 | symmetric and asymmetric multiprocessors | implemented and tested | `--core-cpi 1,1,4,4` (big/little cores) | `nexus_manycore` |
 | snooping and directory coherence | implemented and tested | `--coherence snoop / directory-lite` | `nexus_coherence_test` |
 | memory consistency, synchronisation | implemented and tested | `--consistency sc / weak-lite`, locks, barriers, atomics | `nexus_consistency_test`, `nexus_phase10_golden` |
@@ -128,6 +133,7 @@ No topic of the six outlines is left outside the project.
 | vector and SIMD programming | implemented and tested | `benchmarks/simd/simd_bench.cpp` | `nexus_simd_benchmark` |
 | vector computers: pipelined vector units, chaining, strip-mining, strided access | implemented and tested | `src/sim/vector/` (`mips-sim vector`) | `nexus_vector_test` |
 | GPUs and SIMT execution | implemented and tested | `src/sim/simt/`: warps, reconvergence stack, SIMD efficiency, memory coalescing (`--mode simt`) | `nexus_simt_test` |
+| GPU programming model: thread blocks, shared memory, bank conflicts, barriers | implemented and tested | `src/sim/simt/` (`--block N`) | `nexus_gpu_blocks_test` |
 | GPU programming on a device (CUDA) | implemented, toolchain-dependent | `benchmarks/gpu_optional/gpu_optional_bench.cu` | `nexus_gpu_optional` (needs `nvcc`; passed on a Colab Tesla T4, GPU checksums equal the CPU) |
 | interconnects: bus, switch, ring, 2-D mesh NoC | implemented and tested | `--interconnect bus / switch / ring / mesh / noc-lite` | `nexus_interconnect_test`, `nexus_manycore` |
 | manycore (up to 64 cores) | implemented and tested | SPMD reduction on 1-64 cores | `nexus_manycore` |

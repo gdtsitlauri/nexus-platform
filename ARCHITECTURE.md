@@ -47,12 +47,12 @@ flowchart LR
 | `src/compiler/polyhedral` | loop-nest dependence analysis, unimodular transformations, exact simplex, branch and bound, hyperplane schedules |
 | `src/mips` | ISA tables, assembly text model, loader, MIPS32 encoder |
 | `src/sim/functional`, `single_cycle`, `multi_cycle`, `pipeline` | the core simulator ladder (hardwired and microcoded control, hazards, forwarding, prediction) |
-| `src/sim/memory`, `io`, `metrics` | L1/L2 caches, memory-mapped I/O, interrupts, DMA, statistics |
+| `src/sim/memory`, `io`, `metrics` | L1/L2 caches, virtual memory, non-blocking caches with prefetching, memory-mapped I/O, interrupts, DMA, statistics |
 | `src/sim/advanced` | trace-driven in-order, VLIW-lite, scoreboard and Tomasulo/ROB/SMT schedulers; coarse/fine/SMT multithreading |
-| `src/sim/parallel` | multicore with coherence, consistency, synchronisation and interconnects |
+| `src/sim/parallel` | multicore with coherence, consistency, synchronisation and interconnects; message passing |
 | `src/sim/vector` | VMIPS-style vector processor: strip-mining, chaining, lanes, convoys |
-| `src/sim/simt` | warp-based SIMT GPU model |
-| `src/hdl` | Verilog ALU, adder, multiplier, divider, register file, control, pipeline registers, CPU slice, pipelined CPU, console and timer devices on its I/O bus |
+| `src/sim/simt` | warp-based SIMT GPU model with thread blocks, shared memory and barriers |
+| `src/hdl` | Verilog ALU, adder, multiplier, divider, register file, control, pipeline registers, CPU slice, pipelined CPU with branch prediction, console and timer devices on its I/O bus, multi-cycle CPU with hardwired and microprogrammed control |
 | `benchmarks/` | OpenMP, MPI, SIMD and optional CUDA programs |
 
 ## Design Rules

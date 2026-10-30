@@ -2,17 +2,28 @@
 
 ## Snapshot
 
-- Version: 3.0.0 (2026-10-30); 2.0.0 was released on 2026-10-14, 1.0.0 on 2026-10-05
+- Version: 3.1.0 (2026-10-30); 3.0.0 earlier the same day, 2.0.0 on 2026-10-14, 1.0.0 on 2026-10-05
 - Scope: the six course outlines in `docs/course_outlines/` (NEY613, NEY709, NEY221, EY321, NEY606,
   NEY704); every topic is implemented as code with an automated test, except history, taxonomy and
   reading-list topics, which are notes (see `docs/reports/full_syllabus_checklist.md`)
 - Build: CMake 4.4 + Ninja, C++20; verified with Clang (zig 0.17 toolchain) on Windows 11
-- Tests: 73 CTest tests on Windows with Icarus Verilog and Yosys (OSS CAD Suite) installed: 72 passed,
+- Tests: 78 CTest tests on Windows with Icarus Verilog and Yosys (OSS CAD Suite) installed: 77 passed,
   1 skipped (`nexus_toolchain_compare`, needs `clang` on the PATH); the OpenMP and MPI benchmark tests are
   not registered when those toolchains are absent
 - Colab runs (Tesla T4 with CUDA, and Linux/GCC) were made with version 2.0.0 and are kept in
   `results/colab/`; they include tests of the four courses that 3.0.0 removed
 - HDL: Icarus Verilog for the testbench suites, the RTL co-simulation and the I/O system; Yosys for synthesis
+
+## What 3.1.0 Added
+
+| area | addition | test |
+| --- | --- | --- |
+| EY321 | virtual memory: TLB, page table, FIFO/LRU/Clock/OPT replacement, dirty write-backs to disk | `nexus_memory_hierarchy_test` |
+| EY321 | multi-cycle Verilog CPU with hardwired and with microprogrammed control | `nexus_hdl_multicycle_cosim` |
+| EY321 | branch prediction (static and two-bit counters) in the Verilog pipelined CPU | `nexus_hdl_branch_prediction` |
+| NEY606 | non-blocking cache with MSHRs, next-line and stride prefetching | `nexus_memory_hierarchy_test` |
+| NEY704 | distributed memory: message passing, collectives, topologies, deadlock detection | `nexus_message_passing_test` |
+| NEY704 | GPU thread blocks, shared memory, bank conflicts, barriers | `nexus_gpu_blocks_test` |
 
 ## What 3.0.0 Changed
 

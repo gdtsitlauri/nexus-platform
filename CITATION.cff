@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 title: "NEXUS: a compiler, CPU simulators, parallel, vector and GPU models and a Verilog MIPS CPU covering six computer-systems courses"
 type: software
-version: 3.0.0
+version: 3.1.0
 authors:
   - given-names: "George David"
     family-names: "Tsitlauri"
@@ -18,5 +18,6 @@ abstract: >-
   functional interpreter to a Tomasulo core with reorder buffer, software pipelining by modulo scheduling,
   coarse-grained, fine-grained and simultaneous multithreading, multicore, network-on-chip, vector and SIMT
   GPU models; and a synthesisable 5-stage pipelined MIPS core with memory-mapped I/O and interrupts,
-  co-simulated against the simulators.
+  co-simulated against the simulators, plus a multi-cycle core with hardwired and microprogrammed control,
+  virtual memory, non-blocking caches with prefetching, message passing and GPU thread blocks.
 keywords: [compilers, computer architecture, MIPS, simulation, Tomasulo, polyhedral, linear programming, software pipelining, multithreading, vector processors, Verilog, education]

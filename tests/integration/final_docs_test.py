@@ -72,10 +72,10 @@ def check_final(root: Path) -> None:
     architecture = read(root / "ARCHITECTURE.md")
     changelog = read(root / "CHANGELOG.md")
 
-    require("3.0.0" in status, "STATUS.md does not reflect version 3.0.0")
-    require("3.0.0" in readme, "README.md missing version 3.0.0")
+    require("3.1.0" in status, "STATUS.md does not reflect version 3.1.0")
+    require("3.1.0" in readme, "README.md missing version 3.1.0")
     require("HDL" in architecture, "ARCHITECTURE.md missing HDL coverage")
-    require("[3.0.0]" in changelog, "CHANGELOG.md missing the 3.0.0 entry")
+    require("[3.1.0]" in changelog, "CHANGELOG.md missing the 3.1.0 entry")
 
     for relative in (
         "CITATION.cff",
@@ -99,6 +99,8 @@ def check_final(root: Path) -> None:
         "examples/flow/flow_demo.nx",
         "scripts/nexus_flow.py",
         "src/hdl/cpu_pipeline/nexus_io_devices.v",
+        "src/hdl/cpu_multicycle/nexus_mips_multicycle.v",
+        "examples/gpu/block_reduce.s",
         "examples/vector/daxpy.vasm",
         "examples/schedules/daxpy.ddg",
         "examples/multithreading/stream.s",

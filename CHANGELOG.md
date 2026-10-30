@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.1.0] - 2026-10-30
+
+The remaining topics of the six outlines that 3.0.0 covered only in part:
+
+- EY321: virtual memory down to secondary storage (`mips-sim vm`); a multi-cycle Verilog CPU with a hardwired
+  and a microprogrammed control unit (`src/hdl/cpu_multicycle/`); branch prediction in the Verilog pipelined
+  CPU (`PREDICT` parameter: not taken, backward taken, two-bit counters)
+- NEY606: non-blocking caches with MSHRs and next-line/stride prefetching (`mips-sim cache`)
+- NEY704: distributed-memory message passing with broadcast, reduce and allreduce on fully connected, ring,
+  mesh and hypercube networks (`mips-sim msg`); thread blocks, shared memory, bank conflicts and barriers in the
+  SIMT model (`--block N`)
+
 ## [3.0.0] - 2026-10-30
 
 The project now covers six courses (NEY613 Compilers, NEY709 Advanced Compiler Topics, NEY221 Principles of

@@ -12,7 +12,7 @@ int main() {
     return 1;
   }
 
-  if (info.version_label != "3.0.0") {
+  if (info.version_label != "3.1.0") {
     std::cerr << "Unexpected version label: " << info.version_label << '\n';
     return 1;
   }

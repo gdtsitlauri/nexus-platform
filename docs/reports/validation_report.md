@@ -1,8 +1,8 @@
-# Validation Report (version 3.0.0)
+# Validation Report (version 3.1.0)
 
 ## Environment
 
-- Date: 2026-10-30 (version 3.0.0; the 2.0.0 run was on 2026-10-14, 1.0.0 on 2026-10-05)
+- Date: 2026-10-30 (version 3.1.0; the 2.0.0 run was on 2026-10-14, 1.0.0 on 2026-10-05)
 - Host: Windows 11 Pro, AMD Ryzen 5 5600H
 - Toolchain: CMake 4.4.4, Ninja 1.13.2, Clang (zig 0.17 c++), win_flex/win_bison 2.5.25, Python 3.13,
   Icarus Verilog and Yosys from the OSS CAD Suite (2026-10-14)
@@ -14,7 +14,7 @@
 cd build && ctest --output-on-failure -j8
 ```
 
-73 tests: 72 passed, 1 skipped (`nexus_toolchain_compare`, `clang` not in PATH). The OpenMP and MPI benchmark
+78 tests: 77 passed, 1 skipped (`nexus_toolchain_compare`, `clang` not in PATH). The OpenMP and MPI benchmark
 tests are not registered on this host because no OpenMP-capable compiler and no `mpicxx` were found;
 `nexus_gpu_optional` passes through its CUDA-disabled path.
 
@@ -43,6 +43,13 @@ tests are not registered on this host because no OpenMP-capable compiler and no 
 | modulo schedules | every dependence and resource constraint | 2 examples + 400 random loop bodies | all valid; II = MII in 396/400 |
 | vector processor | scalar DAXPY; convoy counts | n = 1-257, 1-4 lanes | equal results; 3 (chained) / 4 convoys per strip |
 | multithreading policies | functional exit codes; one-thread equality | 1-4 threads, 2 miss penalties | equal results; textbook trade-off |
+| page replacement | reference LRU stack; OPT lower bound; Belady's string | 300 random strings | equal; bounds and anomaly hold |
+| virtual-memory cycles | sum of TLB, page-walk and disk costs | sequential writes over 12 pages | exact |
+| non-blocking cache | blocking formula; prefetch and MSHR monotonicity | 1000-element stream | exact; as expected |
+| message-passing collectives | closed-form costs | 2-16 nodes, 1 and 1000 words | exact |
+| GPU block reduction | closed-form block sums; bank-conflict cycles | warp sizes 4, 8, 32 | equal; exact |
+| multi-cycle Verilog CPU, hardwired and microprogrammed | functional simulator (exit code and instructions) | 16 runs x 2 control units | all equal, identical cycles |
+| branch predictors in the Verilog pipelined CPU | functional simulator | 16 runs x 3 predictors | all equal; fewer mispredictions and cycles |
 | the full flow (`nexus_full_flow`) | one compiled program on 10 CPU models x 2 allocators and on the Verilog CPU with its console; a timer interrupt on the Verilog CPU vs the pipeline simulator | 1 program + 1 interrupt program | identical console text, exit codes and interrupt count |
 
 ## Linux / GCC Run of Version 2.0.0 (Google Colab, 2026-10-14)
