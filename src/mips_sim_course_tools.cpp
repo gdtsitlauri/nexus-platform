@@ -12,6 +12,7 @@
 #include "nexus/sim/functional/interpreter.hpp"
 #include "nexus/sim/memory/nonblocking_cache.hpp"
 #include "nexus/sim/memory/virtual_memory.hpp"
+#include "nexus/sim/parallel/message_passing.hpp"
 #include "nexus/sim/vector/model.hpp"
 
 int run_vector(int argc, char** argv) {
@@ -230,5 +231,54 @@ int run_cache_study(int argc, char** argv) {
   std::cout << s.instructions << " instructions, " << s.accesses << " accesses: " << s.hits << " hits, " << s.misses
             << " misses, " << s.merged << " merged into lines in flight; " << s.prefetches << " prefetches ("
             << s.useful_prefetches << " useful); " << s.cycles << " cycles, " << s.stall_cycles << " stall cycles\n";
+  return 0;
+}
+
+// Distributed memory (NEY704): mips-sim msg <collective> [--nodes P] [--topology T] [--words M]
+int run_message_passing_study(int argc, char** argv) {
+  namespace mp = nexus::sim::parallel;
+  const std::string usage =
+      "usage: mips-sim msg <bcast-linear|bcast-tree|reduce|allreduce-rb|allreduce-rd> [--nodes P] "
+      "[--topology full|ring|mesh|hypercube] [--words M]\n";
+  if (argc < 3) {
+    std::cerr << usage;
+    return 1;
+  }
+  const std::string name = argv[2];
+  mp::Collective collective;
+  if (name == "bcast-linear") collective = mp::Collective::BroadcastLinear;
+  else if (name == "bcast-tree") collective = mp::Collective::BroadcastTree;
+  else if (name == "reduce") collective = mp::Collective::ReduceTree;
+  else if (name == "allreduce-rb") collective = mp::Collective::AllreduceReduceBroadcast;
+  else if (name == "allreduce-rd") collective = mp::Collective::AllreduceRecursiveDoubling;
+  else {
+    std::cerr << usage;
+    return 1;
+  }
+  mp::NetworkConfig net;
+  std::size_t words = 1;
+  for (int i = 3; i + 1 < argc; i += 2) {
+    const std::string arg = argv[i];
+    const std::string value = argv[i + 1];
+    if (arg == "--nodes") net.nodes = std::stoul(value);
+    else if (arg == "--words") words = std::stoul(value);
+    else if (arg == "--topology") {
+      net.topology = value == "ring" ? mp::Topology::Ring : value == "mesh" ? mp::Topology::Mesh
+                   : value == "hypercube" ? mp::Topology::Hypercube : mp::Topology::Full;
+    }
+  }
+  const auto r = mp::run_collective(net, collective, words);
+  if (!r.success) {
+    std::cerr << "error: " << r.error << '\n';
+    return 1;
+  }
+  std::cout << mp::collective_name(collective) << " on " << net.nodes << " nodes, " << mp::topology_name(net.topology)
+            << ", " << words << "-word messages\n";
+  std::cout << r.cycles << " cycles, " << r.messages << " messages, " << r.words << " words sent\n";
+  std::cout << "node 0 holds:";
+  for (std::size_t k = 0; k < r.data[0].size() && k < 8; ++k) {
+    std::cout << ' ' << r.data[0][k];
+  }
+  std::cout << (r.data[0].size() > 8 ? " ..." : "") << '\n';
   return 0;
 }

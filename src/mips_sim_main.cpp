@@ -34,6 +34,7 @@ void print_usage(std::ostream& stream) {
          << "  mips-sim mt <single|coarse|fine|smt> <thread.s>... [--width W] [--miss M] [--switch S]\n"
          << "  mips-sim vm <prog.s> [--page B] [--frames F] [--tlb T] [--policy fifo|lru|clock|opt]\n"
          << "  mips-sim cache <prog.s> [--mshr K] [--prefetch none|next|stride] [--penalty P] [--line B]\n"
+         << "  mips-sim msg <bcast-linear|bcast-tree|reduce|allreduce-rb|allreduce-rd> [--nodes P] [--topology T] [--words M]\n"
          << "  mips-sim arith float <a> add|sub|mul|div <b>\n"
          << "  mips-sim arith repr <integer> [bits]\n"
          << "  mips-sim arith booth <a> <b> [bits]\n"
@@ -362,6 +363,7 @@ int run_vector(int argc, char** argv);  // mips_sim_course_tools.cpp
 int run_multithreading(int argc, char** argv);  // mips_sim_course_tools.cpp
 int run_virtual_memory(int argc, char** argv);  // mips_sim_course_tools.cpp
 int run_cache_study(int argc, char** argv);  // mips_sim_course_tools.cpp
+int run_message_passing_study(int argc, char** argv);  // mips_sim_course_tools.cpp
 
 int main(int argc, char** argv) {
   if (argc == 1) {
@@ -378,6 +380,10 @@ int main(int argc, char** argv) {
 
   if (command == "arith") {
     return run_arith(argc, argv);
+  }
+
+  if (command == "msg") {
+    return run_message_passing_study(argc, argv);
   }
 
   if (command == "vm") {
