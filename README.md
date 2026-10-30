@@ -66,7 +66,7 @@ cmake --build build --parallel 2
 
 On Windows the easiest way is WSL (Ubuntu) with the same commands. The build makes two programs in `build/bin`:
 
-| tool | what it does | try |
+| tool | what it does | example |
 | --- | --- | --- |
 | `nexusc` | the compiler and the compiler-course tools | `build/bin/nexusc --help` |
 | `mips-sim` | the processors, memories and parallel machines | `build/bin/mips-sim --help` |
@@ -77,9 +77,8 @@ Run four instructions before a whole compiler-generated program:
 build/bin/mips-sim run examples/basics/mips/01_add.s --mode functional --trace --stats
 ```
 
-It returns 12 by adding 5 and 7. Predict what changing 7 to 9 will do, change it in a copy, and run
-again. [NEY221](docs/courses/NEY221.md#write-your-first-instructions) explains every instruction.
-Before building, you can already run `python examples/basics/full_adder.py 7 1` to see individual carry bits.
+It returns 12 by adding 5 and 7. [NEY221](docs/courses/NEY221.md#write-your-first-instructions) explains every
+instruction. `python examples/basics/full_adder.py 7 1` shows individual carry bits and needs no build.
 
 Check that everything works (one test at a time keeps a laptop cool):
 
