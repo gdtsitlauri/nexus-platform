@@ -4,6 +4,7 @@
 //   vvp tb +program=prog.hex
 `timescale 1ns / 1ps
 module mips_pipeline_tb;
+  parameter PREDICT = 0;
   reg clk = 1'b0;
   reg reset = 1'b1;
   wire halted;
@@ -14,7 +15,7 @@ module mips_pipeline_tb;
   wire [31:0] flushes;
   reg [31:0] entry = 32'd0;
 
-  nexus_mips_pipeline dut(
+  nexus_mips_pipeline #(.PREDICT(PREDICT)) dut(
       .clk(clk),
       .reset(reset),
       .entry_pc(entry),
@@ -62,6 +63,7 @@ module mips_pipeline_tb;
     end else begin
       $display("EXIT %0d INSTRET %0d CYCLES %0d STALLS %0d FLUSHES %0d", $signed(exit_code), retired, cycles, stalls,
                flushes);
+      $display("BRANCHES %0d MISPREDICTS %0d", dut.branches, dut.mispredicts);
       $display("PASS: mips_pipeline_tb");
     end
     $finish;

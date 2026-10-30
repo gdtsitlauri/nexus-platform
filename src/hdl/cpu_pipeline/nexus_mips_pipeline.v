@@ -6,7 +6,10 @@
 // Hazards:
 //   - data:    EX/MEM -> EX and MEM/WB -> EX forwarding, write-before-read register file,
 //              one-cycle load-use interlock
-//   - control: branches and jumps resolve in EX; the two younger instructions are flushed
+//   - control: branches and jumps resolve in EX; the two younger instructions are flushed on a misprediction.
+//     PREDICT = 0 predicts not taken; PREDICT = 1 predicts backward branches taken (BTFN) and redirects j/jal in
+//     IF; PREDICT = 2 uses a table of 2^BHT_BITS two-bit saturating counters indexed by the PC (and redirects
+//     j/jal in IF).  The target of a branch is computed in IF from the fetched instruction.
 //   - HI/LO:   mult/div update HI/LO in EX, so a following mfhi/mflo always sees the new value
 // The program counter counts instruction words (as in the Nexus simulators).  Execution halts when
 // `jr $ra` targets the sentinel 0x80000000 that reset places in $ra; the core then drains the
@@ -20,7 +23,9 @@
 module nexus_mips_pipeline #(
     parameter IMEM_WORDS = 4096,
     parameter DMEM_WORDS = 16384,
-    parameter ENABLE_IO = 0
+    parameter ENABLE_IO = 0,
+    parameter PREDICT = 0,
+    parameter BHT_BITS = 6
 ) (
     input  wire        clk,
     input  wire        reset,
@@ -56,6 +61,11 @@ module nexus_mips_pipeline #(
   reg [31:0] lo;
   reg [31:0] pc;
   reg        fetch_stopped;
+  reg [1:0]  bht [0:(1 << BHT_BITS) - 1];  // two-bit counters (PREDICT = 2)
+  reg [31:0] branches;
+  reg [31:0] mispredicts;
+  reg        ifid_pred;
+  reg        idex_pred;
 
   assign exit_code = regs[2];
 
@@ -217,14 +227,29 @@ module nexus_mips_pipeline #(
     endcase
   end
 
+  wire ex_is_branch = idex_valid && (idex_op == OP_BEQ || idex_op == OP_BNE);
   wire ex_taken_branch = idex_valid && ((idex_op == OP_BEQ && ex_a == ex_b) || (idex_op == OP_BNE && ex_a != ex_b));
-  wire ex_jump = idex_valid && (idex_op == OP_J || idex_op == OP_JAL);
+  wire ex_mispredict = ex_is_branch && (ex_taken_branch != idex_pred);
+  wire ex_jump = idex_valid && (idex_op == OP_J || idex_op == OP_JAL) && !idex_pred;  // unless redirected in IF
   wire ex_halt = idex_valid && idex_op == OP_JR && ex_a == HALT_ADDRESS;
   wire ex_jr = idex_valid && idex_op == OP_JR && !ex_halt;
-  wire ex_redirect = ex_taken_branch || ex_jump || ex_jr;
-  wire [31:0] ex_target = ex_taken_branch ? idex_pc + 32'd1 + idex_imm
+  wire ex_redirect = ex_mispredict || ex_jump || ex_jr;
+  wire [31:0] ex_target = ex_mispredict ? (ex_taken_branch ? idex_pc + 32'd1 + idex_imm : idex_pc + 32'd1)
                         : ex_jump ? {6'd0, idex_jump_target}
                         : ex_a;
+
+  // ---------------------------------------------------------------- IF: prediction
+  wire [31:0] if_word = (pc < IMEM_WORDS) ? imem[pc] : 32'd0;
+  wire        if_is_branch = if_word[31:26] == 6'h04 || if_word[31:26] == 6'h05;
+  wire        if_is_jump = if_word[31:26] == 6'h02 || if_word[31:26] == 6'h03;
+  wire [31:0] if_branch_target = pc + 32'd1 + {{16{if_word[15]}}, if_word[15:0]};
+  wire        if_predict_taken = (PREDICT == 1) ? (if_is_branch && if_word[15])
+                               : (PREDICT == 2) ? (if_is_branch && bht[pc[BHT_BITS-1:0]][1])
+                               : 1'b0;
+  wire        if_redirect = if_predict_taken || (PREDICT != 0 && if_is_jump);
+  wire [31:0] if_next_pc = if_predict_taken ? if_branch_target
+                         : (PREDICT != 0 && if_is_jump) ? {6'd0, if_word[25:0]}
+                         : pc + 32'd1;
 
   // ---------------------------------------------------------------- MEM
   wire [31:0] mem_word_index = {2'b00, exmem_alu[31:2]};
@@ -273,6 +298,13 @@ module nexus_mips_pipeline #(
       end
       regs[29] <= (DMEM_WORDS - 16) * 4;  // $sp
       regs[31] <= HALT_ADDRESS;           // $ra
+      for (index = 0; index < (1 << BHT_BITS); index = index + 1) begin
+        bht[index] <= 2'b01;  // weakly not taken
+      end
+      branches <= 32'd0;
+      mispredicts <= 32'd0;
+      ifid_pred <= 1'b0;
+      idex_pred <= 1'b0;
       in_service <= 1'b0;
       saved_ra <= 32'd0;
       irq_ack <= 1'b0;
@@ -280,6 +312,16 @@ module nexus_mips_pipeline #(
     end else if (!halted) begin
       cycles <= cycles + 32'd1;
       irq_ack <= 1'b0;
+
+      // branch outcome: statistics and the two-bit counter of this branch
+      if (ex_is_branch) begin
+        branches <= branches + 32'd1;
+        if (ex_mispredict) mispredicts <= mispredicts + 32'd1;
+        if (ex_taken_branch && bht[idex_pc[BHT_BITS-1:0]] != 2'b11)
+          bht[idex_pc[BHT_BITS-1:0]] <= bht[idex_pc[BHT_BITS-1:0]] + 2'b01;
+        if (!ex_taken_branch && bht[idex_pc[BHT_BITS-1:0]] != 2'b00)
+          bht[idex_pc[BHT_BITS-1:0]] <= bht[idex_pc[BHT_BITS-1:0]] - 2'b01;
+      end
 
       // WB
       if (memwb_valid) begin
@@ -361,11 +403,13 @@ module nexus_mips_pipeline #(
         idex_mem_read <= id_op == OP_LW;
         idex_mem_write <= id_op == OP_SW;
         idex_jump_target <= ifid_instr[25:0];
+        idex_pred <= ifid_pred;
         if (!fetch_stopped && !irq_wanted && pc < IMEM_WORDS) begin
           ifid_valid <= 1'b1;
           ifid_instr <= imem[pc];
           ifid_pc <= pc;
-          pc <= pc + 32'd1;
+          ifid_pred <= if_redirect;
+          pc <= if_next_pc;
         end else begin
           ifid_valid <= 1'b0;
         end
