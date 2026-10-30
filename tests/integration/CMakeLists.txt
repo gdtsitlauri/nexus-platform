@@ -166,6 +166,16 @@ add_test(
 set_tests_properties(nexus_hdl_pipeline_cosim PROPERTIES SKIP_RETURN_CODE 77)
 
 add_test(
+  NAME nexus_hdl_multicycle_cosim
+  COMMAND
+    "${Python3_EXECUTABLE}"
+    "${PROJECT_SOURCE_DIR}/tests/integration/hdl_multicycle_cosim_test.py"
+    "$<TARGET_FILE:nexusc>"
+    "$<TARGET_FILE:mips_sim>"
+    "${PROJECT_SOURCE_DIR}")
+set_tests_properties(nexus_hdl_multicycle_cosim PROPERTIES SKIP_RETURN_CODE 77)
+
+add_test(
   NAME nexus_manycore
   COMMAND
     "${Python3_EXECUTABLE}"
