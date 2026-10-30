@@ -1,23 +1,21 @@
 #!/usr/bin/env python3
-"""The NEXUS flow from a source program to hardware, in one run.
+"""The NEXUS flow through the six courses, in one run.
 
-  nexus_flow.py <directory of the NEXUS executables, e.g. build/bin> [--gates] [--fpga]
+  nexus_flow.py <directory of the NEXUS executables, e.g. build/bin>
 
-One NexusLang program (examples/flow/flow_demo.nx) goes through every layer and must give the same observable
-result everywhere: the text it sends to the UART and its exit code.
+One NexusLang program (examples/flow/flow_demo.nx) goes through every course and must give the same observable
+result everywhere: the text it sends to the console and its exit code.
 
- 1. compiler      NexusLang -> IR/SSA -> MIPS assembly, with and without linear-scan register allocation
- 2. CPU models    the same binary on every execution model (ISA level, single/multi-cycle, pipeline with
-                  caches, in-order/scoreboard/Tomasulo out-of-order, multicore)
- 3. hardware      the binary encoded as MIPS32 machine code and run on the Verilog CPU inside the SoC
-                  [--gates: and on the gate-level netlist that Yosys synthesises from the same RTL]
- 4. chip design   the CPU's own control unit: Yosys -> BLIF -> nexus-eda technology mapping (proved equivalent with
-                  the SAT solver of the logic-design library), static timing, partitioning, placement, routing
- 5. FPGA          [--fpga] the SoC with this program in its boot ROM -> ECP5 placement, routing, bitstream
- 6. OS            the round-robin kernel on the SoC: its dispatch order (sent to the UART) equals the Gantt chart
-                  that the scheduling library computes for the same jobs
+ 1. NEY613 Compilers                  NexusLang -> IR -> MIPS assembly, with and without linear-scan allocation
+ 2. NEY709 Advanced Compiler Topics   SSA form and sparse conditional constant propagation of the same program
+ 3. NEY221 Principles of Operation    the assembly encoded as MIPS32 machine words
+ 4. EY321  Computer Organization      single-cycle and multi-cycle CPUs (hardwired and microprogrammed control),
+                                      the 5-stage pipeline with caches and memory-mapped I/O, and the Verilog CPU
+                                      with its console (polling) and timer (interrupt) on the I/O bus
+ 5. NEY606 Computer Architecture      in-order, scoreboard and Tomasulo out-of-order cores
+ 6. NEY704 Parallel Systems           the multicore model
 
-Exit codes: 0 every stage that ran agreed, 1 a mismatch, 77 Icarus Verilog missing.
+Exit codes: 0 every stage agreed, 1 a mismatch, 77 Icarus Verilog missing.
 """
 from __future__ import annotations
 
@@ -25,34 +23,40 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import soc_flow  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "examples" / "flow" / "flow_demo.nx"
-WANT_UART = "S=5913\\n"
+INTERRUPT_DEMO = ROOT / "tests" / "golden" / "interrupt_demo.s"
+HDL = ROOT / "src" / "hdl" / "cpu_pipeline"
+WANT_TEXT = "S=5913\\n"
 WANT_EXIT = 5913 % 256
 
-MODELS = [
-    ["--mode", "functional"],
-    ["--mode", "single-cycle"],
-    ["--mode", "multi-cycle", "--control", "hardwired"],
-    ["--mode", "multi-cycle", "--control", "microcode"],
-    ["--mode", "pipeline", "--io-demo"],
-    ["--mode", "pipeline", "--io-demo", "--cache", "assoc"],
-    ["--mode", "advanced", "--scheduler", "inorder"],
-    ["--mode", "advanced", "--scheduler", "scoreboard"],
-    ["--mode", "advanced", "--scheduler", "tomasulo", "--issue-width", "4", "--predictor", "2bit"],
-    ["--mode", "parallel", "--cores", "1"],
+STAGES = [
+    ("4. EY321 Computer Organization", [
+        ["--mode", "functional"],
+        ["--mode", "single-cycle"],
+        ["--mode", "multi-cycle", "--control", "hardwired"],
+        ["--mode", "multi-cycle", "--control", "microcode"],
+        ["--mode", "pipeline", "--io-demo"],
+        ["--mode", "pipeline", "--io-demo", "--cache", "assoc"],
+    ]),
+    ("5. NEY606 Computer Architecture", [
+        ["--mode", "advanced", "--scheduler", "inorder"],
+        ["--mode", "advanced", "--scheduler", "scoreboard"],
+        ["--mode", "advanced", "--scheduler", "tomasulo", "--issue-width", "4", "--predictor", "2bit"],
+    ]),
+    ("6. NEY704 Parallel Systems", [
+        ["--mode", "parallel", "--cores", "1"],
+    ]),
 ]
 
 failures = 0
 
 
-def sh(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run(list(args), text=True, capture_output=True, check=False, cwd=cwd)
+def sh(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(list(args), text=True, capture_output=True, check=False)
 
 
 def check(ok: bool, stage: str, detail: str) -> None:
@@ -65,89 +69,88 @@ def console_text(out: str) -> str:
     return "".join("\\n" if v == "10" else chr(int(v)) for v in re.findall(r"io\[console\]: value=(\d+)", out))
 
 
+def encode(mips_sim: str, program: Path, out: Path) -> tuple[int, int, int]:
+    r = sh(mips_sim, "encode", str(program), "-o", str(out))
+    if r.returncode != 0:
+        raise SystemExit(f"encode failed: {r.stderr}")
+    entry = int(re.search(r"entry (\d+)", r.stderr).group(1))
+    handler = re.search(r"handler (\d+)", r.stderr)
+    words = sum(1 for line in out.read_text().splitlines() if line.strip())
+    return entry, int(handler.group(1)) if handler else 0, words
+
+
+def rtl(image: Path, hexfile: Path, entry: int, handler: int) -> dict[str, str]:
+    r = sh("vvp", "-n", str(image), f"+program={hexfile.as_posix()}", f"+entry={entry}", f"+handler={handler}")
+    text = re.search(r"^CONSOLE (.*)$", r.stdout, re.M)
+    result = re.search(r"EXIT (-?\d+) INSTRET (\d+) INTERRUPTS (\d+) POLLS (\d+) CYCLES (\d+)", r.stdout)
+    if not text or not result:
+        return {"text": "?", "exit": "?", "instret": "?", "interrupts": "?", "polls": "?", "cycles": "?"}
+    exit_code, instret, interrupts, polls, cycles = result.groups()
+    return {"text": text.group(1), "exit": exit_code, "instret": instret, "interrupts": interrupts, "polls": polls,
+            "cycles": cycles}
+
+
 def main() -> int:
     bindir = Path(sys.argv[1])
     exe = ".exe" if (bindir / "nexusc.exe").exists() else ""
     nexusc, mips_sim = str(bindir / f"nexusc{exe}"), str(bindir / f"mips-sim{exe}")
-    eda, nexus_os = str(bindir / f"nexus-eda{exe}"), str(bindir / f"nexus-os{exe}")
     if shutil.which("iverilog") is None or shutil.which("vvp") is None:
         print("SKIP: iverilog not found")
         return 77
-    work = soc_flow.BUILD
-    work.mkdir(parents=True, exist_ok=True)
 
-    print("1. compiler: NexusLang -> MIPS")
-    asm = {}
-    for alloc in ("none", "linear-scan"):
-        out = work / f"flow_{alloc}.s"
-        r = sh(nexusc, "compile", str(SOURCE), "-S", "--regalloc", alloc, "-o", str(out))
-        check(r.returncode == 0, f"nexusc compile --regalloc {alloc}", out.name)
-        asm[alloc] = out
-    r = sh(nexusc, "analysis", "ssa", str(SOURCE))
-    check(r.returncode == 0 and "phi" in r.stdout, "SSA form of the same program", "phi nodes present")
+    with tempfile.TemporaryDirectory() as temp_dir:
+        work = Path(temp_dir)
+        print("1. NEY613 Compilers: NexusLang -> MIPS assembly")
+        asm = {}
+        for alloc in ("none", "linear-scan"):
+            out = work / f"flow_{alloc}.s"
+            r = sh(nexusc, "compile", str(SOURCE), "-S", "--regalloc", alloc, "-o", str(out))
+            check(r.returncode == 0, f"nexusc compile --regalloc {alloc}", out.name)
+            asm[alloc] = out
 
-    print("2. CPU models: the same binary everywhere")
-    for alloc, path in asm.items():
-        for model in MODELS:
-            r = sh(mips_sim, "run", str(path), *model)
-            out = r.stdout + r.stderr
-            code = re.search(r"Program exited with code (-?\d+)", out)
-            text = console_text(out)
-            ok = code is not None and int(code.group(1)) == WANT_EXIT and text == WANT_UART
-            name = " ".join(m for m in model[1:] if m not in ("--io-demo", "--control", "--scheduler"))
-            check(ok, f"{name} [{alloc}]",
-                  f"uart '{text}' exit {code.group(1) if code else '?'}")
+        print("2. NEY709 Advanced Compiler Topics: analysis of the same program")
+        r = sh(nexusc, "analysis", "ssa", str(SOURCE))
+        check(r.returncode == 0 and "phi" in r.stdout, "SSA form", "phi nodes present")
+        r = sh(nexusc, "analysis", "sccp", str(SOURCE))
+        check(r.returncode == 0, "sparse conditional constant propagation", "runs on the IR")
 
-    print("3. hardware: MIPS32 machine code on the Verilog SoC")
-    hexfile = work / "flow.hex"
-    entry, handler = soc_flow.encode(mips_sim, asm["linear-scan"], hexfile)
-    vvp = work / "soc.vvp"
-    r = sh("iverilog", "-g2012", "-o", str(vvp), str(soc_flow.HDL / "cpu_pipeline" / "nexus_mips_pipeline.v"),
-           str(soc_flow.HDL / "soc" / "nexus_soc.v"), str(soc_flow.HDL / "soc" / "soc_tb.v"))
-    if r.returncode != 0:
-        print(r.stderr)
-        return 1
-    code, uart, _ = soc_flow.rtl(vvp, hexfile, entry, handler, 0)
-    check(code == WANT_EXIT and uart == WANT_UART, "SoC RTL (Icarus Verilog)", f"uart '{uart}' exit {code}")
-    if "--gates" in sys.argv:
-        code, uart, _ = soc_flow.gates(hexfile, entry, handler, 0, imem_words=256)
-        check(code == WANT_EXIT and uart == WANT_UART, "gate-level netlist (Yosys)", f"uart '{uart}' exit {code}")
+        print("3. NEY221 Principles of Computer Operation: MIPS32 machine code")
+        hexfile = work / "flow.hex"
+        entry, _, words = encode(mips_sim, asm["linear-scan"], hexfile)
+        check(words > 0, "mips-sim encode", f"{words} machine words, entry {entry}")
 
-    print("4. chip design: the CPU's control unit through nexus-eda")
-    if shutil.which("yosys") is not None:
-        blif = work / "control.blif"
-        r = sh("yosys", "-q", "-p", f"read_verilog {soc_flow.HDL / 'control' / 'nexus_control_unit.v'}; "
-               f"synth -flatten -top nexus_control_unit; abc -lut 4; opt_clean; write_blif {blif}")
-        check(r.returncode == 0, "Yosys: control unit -> BLIF", blif.name)
-        r = sh(eda, "flow", str(blif))
-        out = r.stdout
-        cells = re.search(r"technology mapping \(area\): (\d+) cells", out)
-        routed = re.search(r"overflow (\d+)", out)
-        check(r.returncode == 0 and "PROVED" in out, "mapping proved equivalent (SAT)",
-              f"{cells.group(1) if cells else '?'} cells")
-        check(routed is not None and routed.group(1) == "0", "placement and routing", "overflow 0" if routed else "?")
-    else:
-        print("  skip yosys not found")
-
-    print("5. FPGA")
-    if "--fpga" in sys.argv:
-        if shutil.which("yosys") and shutil.which("nextpnr-ecp5"):
-            ok = soc_flow.fpga(mips_sim, asm["linear-scan"])
-            check(ok, "ECP5 placement, routing, bitstream", "build/soc/fpga_report.txt")
-        else:
-            print("  skip nextpnr-ecp5 not found")
-    else:
-        print("  skip (run with --fpga)")
-
-    print("6. OS: the kernel on the SoC against the scheduling library")
-    kernel = ROOT / "examples" / "os" / "rr_kernel.s"
-    khex = work / "rr_kernel.hex"
-    kentry, khandler = soc_flow.encode(mips_sim, kernel, khex)
-    code, uart, irqs = soc_flow.rtl(vvp, khex, kentry, khandler, 0)
-    r = sh(nexus_os, "schedule", str(ROOT / "examples" / "os" / "rr_kernel.jobs"), "--policy", "rr", "--quantum", "1")
-    gantt = "".join(re.findall(r"\[\d+-\d+ (\w+)\]", r.stdout))
-    check(code == len(gantt) and irqs == len(gantt) and uart == gantt, "kernel dispatch order = RR Gantt chart",
-          f"SoC '{uart}', nexus-os '{gantt}'")
+        for title, models in STAGES:
+            print(title + ": the same program, the same result")
+            for alloc, path in asm.items():
+                for model in models:
+                    r = sh(mips_sim, "run", str(path), *model)
+                    out = r.stdout + r.stderr
+                    code = re.search(r"Program exited with code (-?\d+)", out)
+                    text = console_text(out)
+                    ok = code is not None and int(code.group(1)) == WANT_EXIT and text == WANT_TEXT
+                    name = " ".join(m for m in model[1:] if m not in ("--io-demo", "--control", "--scheduler"))
+                    check(ok, f"{name} [{alloc}]", f"console '{text}' exit {code.group(1) if code else '?'}")
+            if title.startswith("4."):
+                image = work / "io.vvp"
+                built = sh("iverilog", "-g2012", "-o", str(image), str(HDL / "nexus_mips_pipeline.v"),
+                           str(HDL / "nexus_io_devices.v"), str(HDL / "cpu_io_tb.v"))
+                if built.returncode != 0:
+                    print(built.stdout + built.stderr)
+                    return 1
+                got = rtl(image, hexfile, entry, 0)
+                check(got["text"] == WANT_TEXT and got["exit"] == str(WANT_EXIT),
+                      "Verilog CPU, console polled on the I/O bus",
+                      f"console '{got['text']}' exit {got['exit']}, {got['polls']} status polls")
+                irq_hex = work / "interrupt.hex"
+                irq_entry, irq_handler, _ = encode(mips_sim, INTERRUPT_DEMO, irq_hex)
+                sim = sh(mips_sim, "run", str(INTERRUPT_DEMO), "--mode", "pipeline", "--interrupt-demo", "--stats")
+                sim_out = sim.stdout + sim.stderr
+                sim_code = re.search(r"Program exited with code (-?\d+)", sim_out)
+                got = rtl(image, irq_hex, irq_entry, irq_handler)
+                check(sim_code is not None and got["exit"] == sim_code.group(1) and got["interrupts"] == "1",
+                      "timer interrupt on the Verilog CPU = simulator",
+                      f"exit {got['exit']} (simulator {sim_code.group(1) if sim_code else '?'}), "
+                      f"{got['interrupts']} interrupt")
 
     print("PASS" if failures == 0 else f"FAIL ({failures})")
     return 0 if failures == 0 else 1

@@ -12,7 +12,7 @@
 // `jr $ra` targets the sentinel 0x80000000 that reset places in $ra; the core then drains the
 // pipeline and raises `halted`, with the exit code in $v0.
 //
-// With ENABLE_IO = 1 (the NEXUS SoC, src/hdl/soc/) loads and stores to byte addresses >= 0x10000 go to the
+// With ENABLE_IO = 1 (nexus_io_devices.v: console and timer) loads and stores to byte addresses >= 0x10000 go to the
 // memory-mapped I/O bus instead of data memory, and `irq` interrupts the core with the semantics of the C++
 // pipeline model: fetch stops, the pipeline drains, $ra receives the interrupted PC (its old value is kept),
 // the PC jumps to `irq_handler` and `irq_ack` pulses; `jr $ra` inside the handler returns and restores $ra.

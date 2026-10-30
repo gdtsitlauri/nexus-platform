@@ -1,44 +1,32 @@
-// NEXUS system-on-chip (NEY604): the pipelined MIPS core with a memory-mapped I/O bus and three peripherals.
-// The memory map matches the C++ simulators (src/sim/io), so the same program runs on mips-sim and on this RTL:
-//   0x10000  UART data (write: transmit the low byte)      0x10004  UART status (bit 0: ready to accept a byte)
+// I/O devices on the memory-mapped bus of the pipelined core (EY321 (g): I/O units and their communication with
+// the processor through a bus, polling and interrupts).  The memory map matches the C++ simulators (src/sim/io),
+// so the same program runs on mips-sim and on this RTL:
+//   0x10000  console data (write: send the low byte)       0x10004  console status (bit 0: ready for a byte)
 //   0x10100  timer compare (cycles until the interrupt)    0x10104  timer control (bit 0: enable)
 //   0x10108  timer status (bit 0: interrupt pending; write clears)
-//   0x10300  GPIO output register (LEDs)                   0x10304  GPIO input (switches)
-// The UART sends 8N1 frames (start bit, 8 data bits LSB first, stop bit) with CLKS_PER_BIT clocks per bit.
+// The console is busy for BUSY_CYCLES cycles after every byte, so a program must poll the status register
+// (programmed I/O); the timer raises `irq` when its count reaches zero (interrupt-driven I/O).
 
-module nexus_uart_tx #(parameter CLKS_PER_BIT = 8) (
+module nexus_console #(parameter BUSY_CYCLES = 4) (
     input  wire       clk,
     input  wire       reset,
     input  wire       start,
     input  wire [7:0] data,
-    output reg        tx,
-    output wire       ready);
-  reg [9:0]  shift;
-  reg [3:0]  bits_left;
-  reg [15:0] count;
-  assign ready = bits_left == 4'd0;
+    output wire       ready,
+    output reg        sent,       // one-cycle pulse when a byte is accepted
+    output reg  [7:0] sent_byte);
+  reg [7:0] busy;
+  assign ready = busy == 8'd0;
   always @(posedge clk) begin
+    sent <= 1'b0;
     if (reset) begin
-      tx <= 1'b1;
-      bits_left <= 4'd0;
-      count <= 16'd0;
-      shift <= 10'h3ff;
-    end else if (bits_left == 4'd0) begin
-      tx <= 1'b1;
-      if (start) begin
-        shift <= {1'b1, data, 1'b0};  // stop, data, start (sent LSB first)
-        bits_left <= 4'd10;
-        count <= 16'd0;
-      end
-    end else begin
-      tx <= shift[0];
-      if (count == CLKS_PER_BIT - 1) begin
-        count <= 16'd0;
-        shift <= {1'b1, shift[9:1]};
-        bits_left <= bits_left - 4'd1;
-      end else begin
-        count <= count + 16'd1;
-      end
+      busy <= 8'd0;
+    end else if (start && ready) begin
+      busy <= BUSY_CYCLES[7:0];
+      sent <= 1'b1;
+      sent_byte <= data;
+    end else if (busy != 8'd0) begin
+      busy <= busy - 8'd1;
     end
   end
 endmodule
@@ -82,64 +70,60 @@ module nexus_timer (
   end
 endmodule
 
-module nexus_soc #(
+// The core, the two devices and the address decoder of the I/O bus.
+module nexus_io_system #(
     parameter IMEM_WORDS = 4096,
     parameter DMEM_WORDS = 16384,
-    parameter CLKS_PER_BIT = 8
+    parameter BUSY_CYCLES = 4
 ) (
     input  wire        clk,
     input  wire        reset,
     input  wire [31:0] entry_pc,
     input  wire [31:0] irq_handler,
-    input  wire        imem_we,
-    input  wire [31:0] imem_waddr,
-    input  wire [31:0] imem_wdata,
-    input  wire [7:0]  switches,
-    output reg  [7:0]  leds,
-    output wire        uart_tx,
     output wire        halted,
     output wire [31:0] exit_code,
+    output wire [31:0] retired,
     output wire [31:0] cycles,
-    output wire [31:0] interrupts);
+    output wire [31:0] interrupts,
+    output wire        console_sent,
+    output wire [7:0]  console_byte,
+    output reg  [31:0] status_polls);
   wire [31:0] io_addr, io_wdata;
   wire io_we, io_re, irq_ack;
-  wire [31:0] retired, stalls, flushes;
-  wire uart_ready;
+  wire [31:0] stalls, flushes;
+  wire console_ready;
   wire [31:0] timer_compare;
   wire timer_enabled, timer_pending;
   reg  [31:0] io_rdata;
 
   nexus_mips_pipeline #(.IMEM_WORDS(IMEM_WORDS), .DMEM_WORDS(DMEM_WORDS), .ENABLE_IO(1)) cpu (
       .clk(clk), .reset(reset), .entry_pc(entry_pc),
-      .imem_we(imem_we), .imem_waddr(imem_waddr), .imem_wdata(imem_wdata),
+      .imem_we(1'b0), .imem_waddr(32'd0), .imem_wdata(32'd0),
       .halted(halted), .exit_code(exit_code), .retired(retired), .cycles(cycles), .stalls(stalls),
       .flushes(flushes), .io_addr(io_addr), .io_wdata(io_wdata), .io_we(io_we), .io_re(io_re),
       .io_rdata(io_rdata), .irq(timer_pending), .irq_handler(irq_handler), .irq_ack(irq_ack),
       .interrupts(interrupts));
 
-  nexus_uart_tx #(.CLKS_PER_BIT(CLKS_PER_BIT)) uart (
+  nexus_console #(.BUSY_CYCLES(BUSY_CYCLES)) console (
       .clk(clk), .reset(reset), .start(io_we && io_addr == 32'h00010000), .data(io_wdata[7:0]),
-      .tx(uart_tx), .ready(uart_ready));
+      .ready(console_ready), .sent(console_sent), .sent_byte(console_byte));
 
   nexus_timer timer (
       .clk(clk), .reset(reset), .we(io_we), .addr(io_addr), .wdata(io_wdata), .ack(irq_ack),
       .compare(timer_compare), .enabled(timer_enabled), .pending(timer_pending));
 
-  // GPIO output register
   always @(posedge clk) begin
-    if (reset) leds <= 8'd0;
-    else if (io_we && io_addr == 32'h00010300) leds <= io_wdata[7:0];
+    if (reset) status_polls <= 32'd0;
+    else if (io_re && io_addr == 32'h00010004) status_polls <= status_polls + 32'd1;
   end
 
   // read multiplexer of the I/O bus (address decoder)
   always @(*) begin
     case (io_addr)
-      32'h00010004: io_rdata = {31'd0, uart_ready};
+      32'h00010004: io_rdata = {31'd0, console_ready};
       32'h00010100: io_rdata = timer_compare;
       32'h00010104: io_rdata = {31'd0, timer_enabled};
       32'h00010108: io_rdata = {31'd0, timer_pending};
-      32'h00010300: io_rdata = {24'd0, leds};
-      32'h00010304: io_rdata = {24'd0, switches};
       default:      io_rdata = 32'd0;
     endcase
   end
