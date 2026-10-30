@@ -1,3 +1,4 @@
+add_subdirectory(foundations)
 add_subdirectory(frontend)
 add_subdirectory(semantics)
 add_subdirectory(ir)

@@ -21,6 +21,7 @@
 #include "nexus/compiler/experimental_parallel_parsing/bison_lr.hpp"
 #include "nexus/compiler/experimental_parallel_parsing/prototype.hpp"
 #include "nexus/compiler/formal/automata.hpp"
+#include "nexus/compiler/foundations/foundations.hpp"
 #include "nexus/compiler/formal/grammar.hpp"
 #include "nexus/compiler/frontend/ast_printer.hpp"
 #include "nexus/compiler/frontend/diagnostic.hpp"
@@ -70,6 +71,9 @@ void print_usage(std::ostream& stream) {
          << "  nexusc regex <pattern> [--nfa] [--match <text>...]\n"
          << "  nexusc infer \"<mini-ML expression>\" [--trace]\n"
          << "  nexusc poly <file.loop> [interchange a b | reverse k | skew target source factor]...\n"
+         << "  nexusc graph <file.graph>          DFS/BFS, edge kinds, topological order, SCCs, Warshall closure\n"
+         << "  nexusc tree \"a(b(d e) c)\"          preorder, inorder, postorder, level order\n"
+         << "  nexusc hash <word>...                 chained hash table: buckets, rehashes, probes\n"
          << "  nexusc grammar <file.g> first-follow|transform|ll1|lr0|slr|lr1|lalr|earley [\"tokens\"] [--items]\n";
 }
 
@@ -815,6 +819,55 @@ int run_compile(const LoadedSource& loaded_source, const CompileOptions& options
 
 }  // namespace
 
+int run_foundations(const std::string& command, int argc, char** argv) {
+  namespace fd = nexus::compiler::foundations;
+  if (command == "graph") {
+    LoadedSource source;
+    if (!load_source_file(argv[2], source)) {
+      return 1;
+    }
+    std::string error;
+    const auto graph = fd::parse_graph(source.text, &error);
+    if (!graph) {
+      std::cerr << "error: " << error << '\n';
+      return 1;
+    }
+    std::cout << fd::report(*graph);
+    return 0;
+  }
+  if (command == "tree") {
+    const auto tree = fd::parse_tree(argv[2]);
+    if (!tree) {
+      std::cerr << "error: malformed tree, expected e.g. \"a(b(d e) c)\"\n";
+      return 1;
+    }
+    auto line = [](const std::string& title, const std::vector<std::string>& order) {
+      std::cout << title;
+      for (const auto& label : order) {
+        std::cout << ' ' << label;
+      }
+      std::cout << '\n';
+    };
+    line("preorder:   ", fd::preorder(*tree));
+    line("inorder:    ", fd::inorder(*tree));
+    line("postorder:  ", fd::postorder(*tree));
+    line("level order:", fd::level_order(*tree));
+    std::cout << "height:      " << fd::height(*tree) << '\n';
+    return 0;
+  }
+  fd::HashTable table(4);
+  for (int index = 2; index < argc; ++index) {
+    table.insert(argv[index], index - 1);
+  }
+  std::cout << "entries " << table.size() << ", buckets " << table.bucket_count() << ", load factor "
+            << std::fixed << std::setprecision(2) << table.load_factor() << ", longest chain " << table.longest_chain()
+            << ", rehashes " << table.rehashes() << ", probes " << table.probes() << '\n';
+  for (const auto& [key, value] : table.items()) {
+    std::cout << "  " << key << " -> " << value << "  (bucket " << fd::HashTable::hash(key) % table.bucket_count() << ")\n";
+  }
+  return 0;
+}
+
 int main(int argc, char** argv) {
   if (argc == 1) {
     std::cout << nexus::common::banner_text("nexusc") << '\n'
@@ -918,6 +971,14 @@ int main(int argc, char** argv) {
       return 1;
     }
     return run_poly(argc, argv);
+  }
+
+  if (command == "graph" || command == "tree" || command == "hash") {
+    if (argc < 3) {
+      print_usage(std::cerr);
+      return 1;
+    }
+    return run_foundations(command, argc, argv);
   }
 
   if (command == "grammar") {

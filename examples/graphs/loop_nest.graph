@@ -1,0 +1,5 @@
+# control-flow graph of a loop nest
+entry -> outer
+outer -> inner exit
+inner -> body outer
+body -> inner

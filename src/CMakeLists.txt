@@ -14,6 +14,7 @@ target_link_libraries(
   nexusc
   PRIVATE
     nexus_common
+    nexus_foundations
     nexus_frontend
     nexus_experimental_parallel_parsing
     nexus_semantics
