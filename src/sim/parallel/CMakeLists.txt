@@ -2,7 +2,8 @@ add_library(
   nexus_sim_parallel
   STATIC
     src/model.cpp
-    src/message_passing.cpp)
+    src/message_passing.cpp
+    src/network.cpp)
 
 add_library(Nexus::sim_parallel ALIAS nexus_sim_parallel)
 

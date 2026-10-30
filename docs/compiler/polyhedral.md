@@ -64,5 +64,5 @@ judged legal (341) reproduced the original results exactly.
 ## Limits
 
 Perfect nests only; parameters take concrete values; FM is exact here thanks to gcd tightening and the
-enumeration cross-check, but it is not a full integer-programming (Omega/ISL) solver. Tiling is not
-generated as code.
+enumeration cross-check, but it is not a full integer-programming (Omega/ISL) solver. Tiling is
+rectangular (after an optional skew) and its cache effect is measured with a simple LRU cache model.

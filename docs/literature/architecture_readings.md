@@ -1,36 +1,20 @@
-# Architecture Readings
+# Architecture readings (NEY221, EY321, NEY606)
 
-These notes connect core architecture readings to the implemented Nexus models.
+Classic papers behind the topics of the architecture guides. Read the paper, then run the matching example.
 
-## 1. Patterson and Ditzel, *The Case for the Reduced Instruction Set Computer* (1980)
+| paper | topic | in NEXUS |
+| --- | --- | --- |
+| J. von Neumann, *First Draft of a Report on the EDVAC*, 1945 | the stored-program computer | [EY321 §0](../courses/EY321.md#0-a-short-history) |
+| M. V. Wilkes, *The Best Way to Design an Automatic Calculating Machine*, 1951 | microprogrammed control | [EY321 §3](../courses/EY321.md#3-the-multi-cycle-cpu-hardwired-and-microprogrammed-control) |
+| D. A. Patterson, D. R. Ditzel, *The Case for the Reduced Instruction Set Computer*, Computer Architecture News, 1980 | RISC, load/store | [NEY221 §3](../courses/NEY221.md#3-instruction-set-styles-accumulator-stack-register-memory-loadstore) |
+| G. M. Amdahl, *Validity of the Single Processor Approach to Achieving Large Scale Computing Capabilities*, AFIPS, 1967 | Amdahl's law | [NEY606 §1](../courses/NEY606.md#1-measuring-performance-and-amdahls-law) |
+| R. M. Tomasulo, *An Efficient Algorithm for Exploiting Multiple Arithmetic Units*, IBM J. R&D, 1967 | dynamic scheduling, renaming | [NEY606 §3](../courses/NEY606.md#3-dynamic-scheduling-scoreboard-and-tomasulo) |
+| J. E. Smith, *A Study of Branch Prediction Strategies*, ISCA, 1981 | 2-bit counters | [NEY606 §4](../courses/NEY606.md#4-branch-prediction-and-speculation) |
+| J. A. Fisher, *Very Long Instruction Word Architectures and the ELI-512*, ISCA, 1983 | VLIW | [NEY606 §5](../courses/NEY606.md#5-static-scheduling-vliw-and-software-pipelining) |
+| B. R. Rau, *Iterative Modulo Scheduling*, MICRO, 1994 | software pipelining | [NEY606 §5](../courses/NEY606.md#5-static-scheduling-vliw-and-software-pipelining) |
+| D. Kroft, *Lockup-Free Instruction Fetch/Prefetch Cache Organization*, ISCA, 1981 | non-blocking caches, MSHRs | [NEY606 §6](../courses/NEY606.md#6-advanced-memory-non-blocking-caches-and-prefetching) |
+| A. J. Smith, *Cache Memories*, ACM Computing Surveys, 1982 | caches | [EY321 §5](../courses/EY321.md#5-memory-hierarchy-caches) |
+| P. J. Denning, *Virtual Memory*, ACM Computing Surveys, 1970 | paging, replacement | [EY321 §6](../courses/EY321.md#6-virtual-memory) |
 
-- Why it matters: explains why a regular load/store ISA can simplify datapaths and compilers.
-- Nexus link: the bounded MIPS subset and explicit stack-frame lowering follow this same teaching goal.
-- Useful question while reading: which ISA choices simplify Phase 4 code generation and Phase 5/6 datapaths?
-
-## 2. Tomasulo, *An Efficient Algorithm for Exploiting Multiple Arithmetic Units* (1967)
-
-- Why it matters: classical dynamic-scheduling paper.
-- Nexus link: Phase 8 stops short of Tomasulo-lite, but the advanced-scheduling docs use it as the reference point for what the bounded width/VLIW experiments do not implement.
-
-## 3. Lamport, *How to Make a Multiprocessor Computer That Correctly Executes Multiprocess Programs* (1979)
-
-- Why it matters: the classic sequential-consistency baseline.
-- Nexus link: Phase 10 compares `sc` against a weaker educational store-buffer model.
-
-## 4. Nagarajan, Sorin, Hill, and Wood, *A Primer on Memory Consistency and Cache Coherence* (2nd ed.)
-
-- Why it matters: clean explanation of coherence versus consistency.
-- Nexus link: Phase 7 memory/cache and Phase 10 coherence-lite/consistency-lite experiments are easiest to interpret with this framing.
-
-## 5. Hennessy and Patterson, *Computer Architecture: A Quantitative Approach*
-
-- Why it matters: performance interpretation through CPI, bottlenecks, and Amdahl-style tradeoffs.
-- Nexus link: the metric and report scripts deliberately follow this quantitative style.
-
-## Suggested Nexus Reading Path
-
-1. read Patterson and Ditzel before looking at `docs/architecture/mips_isa.md`
-2. read Lamport before comparing `sc` and `weak-lite`
-3. read the coherence primer before extending the Phase 7/10 memory-system code
-4. treat Tomasulo as the “next step after Nexus” reference for advanced scheduling
+Books: Patterson, Hennessy, *Computer Organization and Design* (NEY221, EY321); Hennessy, Patterson,
+*Computer Architecture: A Quantitative Approach* (NEY606).

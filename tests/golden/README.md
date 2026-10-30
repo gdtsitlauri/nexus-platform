@@ -1,6 +1,6 @@
 # Golden Tests
 
-Phase 6 extends deterministic golden-output fixtures across the functional, single-cycle,
+Deterministic golden-output fixtures for the functional, single-cycle,
 multi-cycle, and pipeline execution paths.
 
 Current fixtures:

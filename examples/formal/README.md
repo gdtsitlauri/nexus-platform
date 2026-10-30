@@ -1,6 +1,6 @@
 # Formal Examples
 
-This directory now contains concrete Phase 2 worked examples that connect the theory material to the
+Worked examples on paper that connect the theory material to the
 implemented frontend.
 
 - `grammar_worked_example.md`: grammar factoring and LL/LR discussion for a bounded expression grammar

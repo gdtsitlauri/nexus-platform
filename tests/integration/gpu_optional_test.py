@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""The CUDA example (NEY704): when it was built (-DNEXUS_ENABLE_CUDA=ON), its GPU results must equal the CPU ones."""
 from __future__ import annotations
 
 import subprocess
@@ -6,41 +7,17 @@ import sys
 from pathlib import Path
 
 
-def require(condition: bool, message: str) -> None:
-    if not condition:
-        raise SystemExit(message)
-
-
 def main() -> int:
     if len(sys.argv) != 3:
         raise SystemExit("usage: gpu_optional_test.py <bin-dir> <repo-root>")
-
-    bin_dir = Path(sys.argv[1]).resolve()
-    repo_root = Path(sys.argv[2]).resolve()
-    parallel_bench = repo_root / "parallel-bench"
-
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(repo_root / "scripts" / "parallel_bench.py"),
-            "--gpu",
-            "--build-dir",
-            str(bin_dir.parent),
-            "--repo-root",
-            str(repo_root),
-        ],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    require(result.returncode == 0, result.stderr)
-    require("suite=gpu" in result.stdout, "missing gpu suite line")
-    require("status=ok" in result.stdout or "status=skipped" in result.stdout, result.stdout)
-
-    gpu_bench = bin_dir / "gpu-bench"
-    if not gpu_bench.exists():
-        require("reason=cuda-disabled" in result.stdout, result.stdout)
-
+    gpu_bench = Path(sys.argv[1]).resolve() / "gpu-bench"
+    if not gpu_bench.exists() and not gpu_bench.with_suffix(".exe").exists():
+        print("gpu-bench not built (configure with -DNEXUS_ENABLE_CUDA=ON on a machine with nvcc): skipped")
+        return 77
+    result = subprocess.run([str(gpu_bench)], text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        raise SystemExit(result.stdout + result.stderr)
+    print(result.stdout)
     return 0
 
 

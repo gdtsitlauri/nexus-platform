@@ -1,0 +1,9 @@
+# 2-D stencil whose dependence (1,-1) points backwards in j: the nest is not fully permutable,
+# so rectangular tiles are illegal as written.  Skewing j by i (T = [[1,0],[1,1]]) turns the
+# distances (1,-1) and (0,1) into (1,0) and (0,1), after which any tile sizes are legal.
+params N = 30, M = 40
+for i = 1 to N {
+  for j = 1 to M {
+    A[i][j] = A[i - 1][j + 1] + A[i][j - 1]
+  }
+}

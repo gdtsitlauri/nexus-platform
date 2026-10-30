@@ -424,6 +424,51 @@ void add_domain(const LoopNest& nest, std::size_t offset, std::size_t width, std
   }
 }
 
+// Instances s (variables 0..d-1) and t (d..2d-1) of the nest where `source` at s and `target` at t touch
+// the same element and s precedes t at loop level `level` (level d + 1: same iteration).
+std::vector<Constraint> dependence_system(const LoopNest& nest, const Access& source, const Access& target,
+                                          std::size_t level) {
+  const std::size_t depth = nest.indices.size();
+  const std::size_t width = 2 * depth;
+  std::vector<Constraint> system;
+  add_domain(nest, 0, width, system);
+  add_domain(nest, depth, width, system);
+  for (std::size_t dim = 0; dim < source.subscripts.size(); ++dim) {
+    Constraint equal{std::vector<std::int64_t>(width, 0), 0};
+    const auto& f = source.subscripts[dim];
+    const auto& g = target.subscripts[dim];
+    for (std::size_t index = 0; index < depth; ++index) {
+      equal.a[index] = f[index];
+      equal.a[depth + index] = -g[index];
+    }
+    equal.b = g.back() - f.back();
+    system.push_back(equal);
+    Constraint opposite = equal;
+    for (auto& c : opposite.a) {
+      c = -c;
+    }
+    opposite.b = -equal.b;
+    system.push_back(opposite);
+  }
+  for (std::size_t loop = 0; loop + 1 < level && loop < depth; ++loop) {
+    Constraint le{std::vector<std::int64_t>(width, 0), 0};
+    le.a[loop] = 1;
+    le.a[depth + loop] = -1;
+    Constraint ge = le;
+    ge.a[loop] = -1;
+    ge.a[depth + loop] = 1;
+    system.push_back(le);
+    system.push_back(ge);
+  }
+  if (level <= depth) {
+    Constraint before{std::vector<std::int64_t>(width, 0), -1};  // s_l - t_l <= -1
+    before.a[level - 1] = 1;
+    before.a[depth + level - 1] = -1;
+    system.push_back(before);
+  }
+  return system;
+}
+
 void enumerate_domain(const LoopNest& nest, std::size_t loop, std::vector<std::int64_t>& point,
                       const std::function<bool(const std::vector<std::int64_t>&)>& visit, bool& stop) {
   if (stop) {
@@ -622,6 +667,97 @@ struct Bound {
   std::int64_t divisor = 1;
 };
 
+struct Projection {
+  std::vector<std::vector<Bound>> lowers;  // per new loop, in terms of the outer new indices
+  std::vector<std::vector<Bound>> uppers;
+};
+
+// Domain in new coordinates y = T x  (x = T^-1 y): constraints a.x <= b become (a T^-1).y <= b.
+std::vector<Constraint> transformed_domain(const LoopNest& nest, const Matrix& inverse) {
+  const std::size_t depth = nest.indices.size();
+  std::vector<Constraint> original;
+  add_domain(nest, 0, depth, original);
+  std::vector<Constraint> system;
+  for (const auto& constraint : original) {
+    Constraint transformed{std::vector<std::int64_t>(depth, 0), constraint.b};
+    for (std::size_t col = 0; col < depth; ++col) {
+      for (std::size_t k = 0; k < depth; ++k) {
+        transformed.a[col] += constraint.a[k] * inverse[k][col];
+      }
+    }
+    if (normalize(transformed)) {
+      system.push_back(transformed);
+    }
+  }
+  return system;
+}
+
+// Bounds of y_k: project out y_{k+1..d-1} by Fourier-Motzkin.
+Projection project_bounds(std::vector<Constraint> projected, std::size_t depth) {
+  Projection projection;
+  projection.lowers.resize(depth);
+  projection.uppers.resize(depth);
+  for (std::size_t k = depth; k-- > 0;) {
+    for (const auto& constraint : projected) {
+      const std::int64_t c = constraint.a[k];
+      if (c == 0) {
+        continue;
+      }
+      // c*y_k <= b - sum_{j<k} a_j y_j
+      Bound bound{std::vector<std::int64_t>(k, 0), constraint.b, c > 0 ? c : -c};
+      for (std::size_t j = 0; j < k; ++j) {
+        bound.coefficients[j] = c > 0 ? -constraint.a[j] : constraint.a[j];
+      }
+      if (c < 0) {
+        bound.constant = -constraint.b;
+      }
+      (c > 0 ? projection.uppers : projection.lowers)[k].push_back(bound);
+    }
+    if (k > 0) {
+      auto next = eliminate(projected, k);
+      projected = next.value_or(std::vector<Constraint>{});
+    }
+  }
+  return projection;
+}
+
+std::int64_t bound_value(const std::vector<Bound>& bounds, const std::vector<std::int64_t>& y, bool lower) {
+  std::int64_t result = lower ? std::numeric_limits<std::int64_t>::min() : std::numeric_limits<std::int64_t>::max();
+  for (const auto& bound : bounds) {
+    std::int64_t value = bound.constant;
+    for (std::size_t j = 0; j < bound.coefficients.size(); ++j) {
+      value += bound.coefficients[j] * y[j];
+    }
+    result = lower ? std::max(result, ceil_div(value, bound.divisor)) : std::min(result, floor_div(value, bound.divisor));
+  }
+  return result;
+}
+
+// `extra` is one more term of the max (lower) or min (upper), such as a tile edge.
+std::string bounds_text(const std::vector<Bound>& bounds, bool lower, const std::vector<std::string>& names,
+                        const std::string& extra = "") {
+  std::vector<std::string> items;
+  for (const auto& bound : bounds) {
+    Affine affine(bound.coefficients);
+    affine.push_back(bound.constant);
+    const std::string body = affine_text(affine, names);
+    items.push_back(bound.divisor == 1 ? body
+                                       : std::string(lower ? "ceil(" : "floor(") + "(" + body + ")/" +
+                                             std::to_string(bound.divisor) + ")");
+  }
+  if (!extra.empty()) {
+    items.push_back(extra);
+  }
+  if (items.size() == 1) {
+    return items.front();
+  }
+  std::string text = lower ? "max(" : "min(";
+  for (std::size_t index = 0; index < items.size(); ++index) {
+    text += (index ? ", " : "") + items[index];
+  }
+  return text + ")";
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------------------------
@@ -667,44 +803,8 @@ DependenceAnalysis analyze_dependences(const LoopNest& nest) {
         if (level == depth + 1 && source.access == target.access) {
           continue;
         }
-        // Variables: s_0..s_{d-1}, t_0..t_{d-1}
         const std::size_t width = 2 * depth;
-        std::vector<Constraint> system;
-        add_domain(nest, 0, width, system);
-        add_domain(nest, depth, width, system);
-        for (std::size_t dim = 0; dim < source.access->subscripts.size(); ++dim) {
-          Constraint equal{std::vector<std::int64_t>(width, 0), 0};
-          const auto& f = source.access->subscripts[dim];
-          const auto& g = target.access->subscripts[dim];
-          for (std::size_t index = 0; index < depth; ++index) {
-            equal.a[index] = f[index];
-            equal.a[depth + index] = -g[index];
-          }
-          equal.b = g.back() - f.back();
-          system.push_back(equal);
-          Constraint opposite = equal;
-          for (auto& c : opposite.a) {
-            c = -c;
-          }
-          opposite.b = -equal.b;
-          system.push_back(opposite);
-        }
-        for (std::size_t loop = 0; loop + 1 < level && loop < depth; ++loop) {
-          Constraint le{std::vector<std::int64_t>(width, 0), 0};
-          le.a[loop] = 1;
-          le.a[depth + loop] = -1;
-          Constraint ge = le;
-          ge.a[loop] = -1;
-          ge.a[depth + loop] = 1;
-          system.push_back(le);
-          system.push_back(ge);
-        }
-        if (level <= depth) {
-          Constraint before{std::vector<std::int64_t>(width, 0), -1};  // s_l - t_l <= -1
-          before.a[level - 1] = 1;
-          before.a[depth + level - 1] = -1;
-          system.push_back(before);
-        }
+        const auto system = dependence_system(nest, *source.access, *target.access, level);
         ++analysis.fm_tests;
         const bool feasible = fm_feasible(system, width);
 
@@ -924,74 +1024,18 @@ TransformResult apply_transformation(const LoopNest& nest, const DependenceAnaly
     }
   }
 
-  // Domain in new coordinates y = T x  (x = T^-1 y): constraints a.x <= b become (a T^-1).y <= b.
-  std::vector<Constraint> original;
-  add_domain(nest, 0, depth, original);
-  std::vector<Constraint> system;
-  for (const auto& constraint : original) {
-    Constraint transformed{std::vector<std::int64_t>(depth, 0), constraint.b};
-    for (std::size_t col = 0; col < depth; ++col) {
-      for (std::size_t k = 0; k < depth; ++k) {
-        transformed.a[col] += constraint.a[k] * (*inverse)[k][col];
-      }
-    }
-    if (normalize(transformed)) {
-      system.push_back(transformed);
-    }
-  }
-  // Bounds of y_k: project out y_{k+1..d-1} by Fourier-Motzkin.
-  std::vector<std::vector<Bound>> lowers(depth);
-  std::vector<std::vector<Bound>> uppers(depth);
-  std::vector<Constraint> projected = system;
-  for (std::size_t k = depth; k-- > 0;) {
-    for (const auto& constraint : projected) {
-      const std::int64_t c = constraint.a[k];
-      if (c == 0) {
-        continue;
-      }
-      // c*y_k <= b - sum_{j<k} a_j y_j
-      Bound bound{std::vector<std::int64_t>(k, 0), constraint.b, c > 0 ? c : -c};
-      for (std::size_t j = 0; j < k; ++j) {
-        bound.coefficients[j] = c > 0 ? -constraint.a[j] : constraint.a[j];
-      }
-      if (c < 0) {
-        bound.constant = -constraint.b;
-      }
-      (c > 0 ? uppers : lowers)[k].push_back(bound);
-    }
-    if (k > 0) {
-      auto next = eliminate(projected, k);
-      projected = next.value_or(std::vector<Constraint>{});
-    }
-  }
+  const auto projection = project_bounds(transformed_domain(nest, *inverse), depth);
+  const auto& lowers = projection.lowers;
+  const auto& uppers = projection.uppers;
 
   std::vector<std::string> new_names;
   for (std::size_t k = 0; k < depth; ++k) {
     new_names.push_back("c" + std::to_string(k + 1));
   }
-  auto bound_text = [&](const Bound& bound, bool lower) {
-    Affine affine(bound.coefficients);
-    affine.push_back(bound.constant);
-    const std::string body = affine_text(affine, new_names);
-    if (bound.divisor == 1) {
-      return body;
-    }
-    return std::string(lower ? "ceil(" : "floor(") + "(" + body + ")/" + std::to_string(bound.divisor) + ")";
-  };
   std::ostringstream code;
   for (std::size_t k = 0; k < depth; ++k) {
-    code << std::string(2 * k, ' ') << "for " << new_names[k] << " = ";
-    auto list = [&](const std::vector<Bound>& bounds, bool lower) {
-      if (bounds.size() == 1) {
-        return bound_text(bounds.front(), lower);
-      }
-      std::string text = lower ? "max(" : "min(";
-      for (std::size_t index = 0; index < bounds.size(); ++index) {
-        text += (index ? ", " : "") + bound_text(bounds[index], lower);
-      }
-      return text + ")";
-    };
-    code << list(lowers[k], true) << " to " << list(uppers[k], false) << " {\n";
+    code << std::string(2 * k, ' ') << "for " << new_names[k] << " = " << bounds_text(lowers[k], true, new_names)
+         << " to " << bounds_text(uppers[k], false, new_names) << " {\n";
   }
   for (std::size_t loop = 0; loop < depth; ++loop) {
     Affine row((*inverse)[loop]);
@@ -1028,22 +1072,8 @@ TransformResult apply_transformation(const LoopNest& nest, const DependenceAnaly
     if (lowers[k].empty() || uppers[k].empty()) {
       return;  // empty (or unbounded) projection
     }
-    std::int64_t low = std::numeric_limits<std::int64_t>::min();
-    std::int64_t high = std::numeric_limits<std::int64_t>::max();
-    for (const auto& bound : lowers[k]) {
-      std::int64_t value = bound.constant;
-      for (std::size_t j = 0; j < k; ++j) {
-        value += bound.coefficients[j] * y[j];
-      }
-      low = std::max(low, ceil_div(value, bound.divisor));
-    }
-    for (const auto& bound : uppers[k]) {
-      std::int64_t value = bound.constant;
-      for (std::size_t j = 0; j < k; ++j) {
-        value += bound.coefficients[j] * y[j];
-      }
-      high = std::min(high, floor_div(value, bound.divisor));
-    }
+    const std::int64_t low = bound_value(lowers[k], y, true);
+    const std::int64_t high = bound_value(uppers[k], y, false);
     for (std::int64_t value = low; value <= high; ++value) {
       y[k] = value;
       walk(k + 1);
@@ -1060,6 +1090,384 @@ TransformResult apply_transformation(const LoopNest& nest, const DependenceAnaly
   result.original_instances = original_instances;
   result.transformed_instances = transformed_instances;
   result.verified = !out_of_domain && transformed_instances == original_instances && actual == expected;
+  return result;
+}
+
+// ---- loop tiling and the cache model -----------------------------------------------------------
+namespace {
+
+// Row-major placement of every array touched by the nest, each array starting on a fresh cache line.
+struct ArrayLayout {
+  std::vector<std::int64_t> low;
+  std::vector<std::int64_t> extent;
+  std::int64_t base = 0;
+};
+using Layout = std::map<std::string, ArrayLayout>;
+
+Layout make_layout(const LoopNest& nest, std::size_t line_elements) {
+  std::map<std::string, std::pair<std::vector<std::int64_t>, std::vector<std::int64_t>>> ranges;
+  auto note = [&](const Access& access, const std::vector<std::int64_t>& point) {
+    auto [entry, inserted] = ranges.try_emplace(access.array);
+    auto& [low, high] = entry->second;
+    if (inserted) {
+      low.assign(access.subscripts.size(), std::numeric_limits<std::int64_t>::max());
+      high.assign(access.subscripts.size(), std::numeric_limits<std::int64_t>::min());
+    }
+    for (std::size_t dim = 0; dim < access.subscripts.size() && dim < low.size(); ++dim) {
+      const std::int64_t value = eval_affine(access.subscripts[dim], point);
+      low[dim] = std::min(low[dim], value);
+      high[dim] = std::max(high[dim], value);
+    }
+  };
+  std::vector<std::int64_t> point(nest.indices.size(), 0);
+  bool stop = false;
+  enumerate_domain(nest, 0, point, [&](const std::vector<std::int64_t>& p) {
+    for (const auto& statement : nest.statements) {
+      for (const auto& read : statement.reads) {
+        note(read, p);
+      }
+      note(statement.target, p);
+    }
+    return true;
+  }, stop);
+  Layout layout;
+  const auto line = static_cast<std::int64_t>(std::max<std::size_t>(line_elements, 1));
+  std::int64_t next = 0;
+  for (const auto& [array, range] : ranges) {
+    ArrayLayout placed;
+    placed.low = range.first;
+    std::int64_t size = 1;
+    for (std::size_t dim = 0; dim < range.first.size(); ++dim) {
+      placed.extent.push_back(range.second[dim] - range.first[dim] + 1);
+      size *= placed.extent.back();
+    }
+    placed.base = next;
+    next += (size + line - 1) / line * line;
+    layout[array] = std::move(placed);
+  }
+  return layout;
+}
+
+class LruCache {
+ public:
+  explicit LruCache(const CacheConfig& config)
+      : line_elements_(std::max<std::size_t>(config.line_elements, 1)),
+        ways_(std::max<std::size_t>(config.ways, 1)),
+        sets_(std::max<std::size_t>(config.sets, 1)) {}
+
+  void access(std::int64_t address, CacheStats& stats) {
+    const auto line = static_cast<std::uint64_t>(address) / line_elements_;
+    auto& set = sets_[line % sets_.size()];
+    ++stats.accesses;
+    const auto found = std::find(set.begin(), set.end(), line);
+    if (found != set.end()) {
+      set.erase(found);
+    } else {
+      ++stats.misses;
+      if (set.size() >= ways_) {
+        set.pop_back();
+      }
+    }
+    set.insert(set.begin(), line);  // most recently used first
+  }
+
+ private:
+  std::size_t line_elements_;
+  std::size_t ways_;
+  std::vector<std::vector<std::uint64_t>> sets_;
+};
+
+std::int64_t address_of(const Layout& layout, const Access& access, const std::vector<std::int64_t>& point) {
+  const auto& placed = layout.at(access.array);
+  std::int64_t offset = 0;
+  for (std::size_t dim = 0; dim < placed.extent.size(); ++dim) {
+    offset = offset * placed.extent[dim] + (eval_affine(access.subscripts[dim], point) - placed.low[dim]);
+  }
+  return placed.base + offset;
+}
+
+// The references of one instance in execution order: the reads of each statement, then its write.
+void trace_instance(const LoopNest& nest, const std::vector<std::int64_t>& point, const Layout& layout,
+                    LruCache& cache, CacheStats& stats) {
+  for (const auto& statement : nest.statements) {
+    for (const auto& read : statement.reads) {
+      cache.access(address_of(layout, read, point), stats);
+    }
+    cache.access(address_of(layout, statement.target, point), stats);
+  }
+}
+
+// Range of y_k over the whole transformed domain (every other variable projected out).
+std::pair<std::int64_t, std::int64_t> global_range(std::vector<Constraint> system, std::size_t depth, std::size_t k) {
+  for (std::size_t j = 0; j < depth; ++j) {
+    if (j != k) {
+      system = eliminate(system, j).value_or(std::vector<Constraint>{});
+    }
+  }
+  std::int64_t low = std::numeric_limits<std::int64_t>::min();
+  std::int64_t high = std::numeric_limits<std::int64_t>::max();
+  for (const auto& constraint : system) {
+    const std::int64_t c = constraint.a[k];
+    if (c > 0) {
+      high = std::min(high, floor_div(constraint.b, c));
+    } else if (c < 0) {
+      low = std::max(low, ceil_div(-constraint.b, -c));
+    }
+  }
+  return {low, high};
+}
+
+std::string vector_text(const std::vector<std::int64_t>& vector) {
+  std::string text = "(";
+  for (std::size_t index = 0; index < vector.size(); ++index) {
+    text += (index ? "," : "") + std::to_string(vector[index]);
+  }
+  return text + ")";
+}
+
+}  // namespace
+
+bool fully_permutable(const LoopNest& nest, const DependenceAnalysis& analysis, const Matrix& transform,
+                      std::string* reason) {
+  const std::size_t depth = nest.indices.size();
+  const bool enumerable = domain_points(nest, kEnumerationLimit).size() <= kEnumerationLimit;
+  if (enumerable) {
+    for (const auto& dependence : analysis.dependences) {
+      for (const auto& distance : dependence.distances) {
+        const auto moved = transform_vector(transform, distance);
+        for (std::size_t k = 0; k < depth; ++k) {
+          if (moved[k] < 0) {
+            if (reason != nullptr) {
+              *reason = "not fully permutable: " + kind_name(dependence.kind) + " dependence on " + dependence.array +
+                        " with distance " + vector_text(distance) + " becomes " + vector_text(moved) +
+                        ", negative in loop " + std::to_string(k + 1);
+            }
+            return false;
+          }
+        }
+      }
+    }
+    return true;
+  }
+  // Too many instances to enumerate: ask Fourier-Motzkin whether some instance has (T d)_k <= -1.
+  std::vector<const Access*> refs;
+  for (const auto& statement : nest.statements) {
+    refs.push_back(&statement.target);
+    for (const auto& read : statement.reads) {
+      refs.push_back(&read);
+    }
+  }
+  for (const auto* source : refs) {
+    for (const auto* target : refs) {
+      if (source->array != target->array || (!source->write && !target->write) ||
+          source->subscripts.size() != target->subscripts.size()) {
+        continue;
+      }
+      for (std::size_t level = 1; level <= depth; ++level) {
+        const auto base = dependence_system(nest, *source, *target, level);
+        for (std::size_t k = 0; k < depth; ++k) {
+          auto system = base;
+          Constraint negative{std::vector<std::int64_t>(2 * depth, 0), -1};  // sum_j T_kj (t_j - s_j) <= -1
+          for (std::size_t j = 0; j < depth; ++j) {
+            negative.a[j] = -transform[k][j];
+            negative.a[depth + j] = transform[k][j];
+          }
+          system.push_back(negative);
+          if (fm_feasible(system, 2 * depth)) {
+            if (reason != nullptr) {
+              *reason = "not fully permutable (Fourier-Motzkin): a dependence on " + source->array +
+                        " carried by loop " + std::to_string(level) + " may become negative in loop " +
+                        std::to_string(k + 1);
+            }
+            return false;
+          }
+        }
+      }
+    }
+  }
+  return true;
+}
+
+std::optional<Matrix> find_tiling_skew(const LoopNest& nest, const DependenceAnalysis& analysis, const Matrix& transform,
+                                       std::int64_t max_factor) {
+  const std::size_t depth = nest.indices.size();
+  std::vector<std::pair<std::size_t, std::size_t>> slots;  // below the diagonal
+  for (std::size_t row = 1; row < depth; ++row) {
+    for (std::size_t col = 0; col < row; ++col) {
+      slots.emplace_back(row, col);
+    }
+  }
+  std::vector<std::vector<std::int64_t>> candidates;
+  std::vector<std::int64_t> factors(slots.size(), 0);
+  std::function<void(std::size_t)> generate = [&](std::size_t slot) {
+    if (slot == slots.size()) {
+      candidates.push_back(factors);
+      return;
+    }
+    for (std::int64_t value = 0; value <= max_factor; ++value) {
+      factors[slot] = value;
+      generate(slot + 1);
+    }
+  };
+  generate(0);
+  std::stable_sort(candidates.begin(), candidates.end(), [](const auto& a, const auto& b) {
+    return std::accumulate(a.begin(), a.end(), std::int64_t{0}) < std::accumulate(b.begin(), b.end(), std::int64_t{0});
+  });
+  for (const auto& candidate : candidates) {
+    Matrix skew = identity(depth);
+    for (std::size_t slot = 0; slot < slots.size(); ++slot) {
+      skew[slots[slot].first][slots[slot].second] = candidate[slot];
+    }
+    const Matrix combined = multiply(skew, transform);
+    if (fully_permutable(nest, analysis, combined)) {
+      return combined;
+    }
+  }
+  return std::nullopt;
+}
+
+CacheStats simulate_cache(const LoopNest& nest, const CacheConfig& cache) {
+  const Layout layout = make_layout(nest, cache.line_elements);
+  LruCache lru(cache);
+  CacheStats stats;
+  std::vector<std::int64_t> point(nest.indices.size(), 0);
+  bool stop = false;
+  enumerate_domain(nest, 0, point, [&](const std::vector<std::int64_t>& p) {
+    trace_instance(nest, p, layout, lru, stats);
+    return true;
+  }, stop);
+  return stats;
+}
+
+TileResult apply_tiling(const LoopNest& nest, const DependenceAnalysis& analysis, const Matrix& transform,
+                        const std::vector<std::int64_t>& tile_sizes, const CacheConfig& cache) {
+  TileResult result;
+  result.tile_sizes = tile_sizes;
+  const std::size_t depth = nest.indices.size();
+  if (tile_sizes.size() != depth ||
+      std::any_of(tile_sizes.begin(), tile_sizes.end(), [](std::int64_t size) { return size < 0; })) {
+    result.reason = "need one tile size >= 0 per loop (0 = not tiled)";
+    return result;
+  }
+  const auto inverse = integer_inverse(transform);
+  if (!inverse.has_value()) {
+    result.reason = "the transformation matrix is not unimodular";
+    return result;
+  }
+  if (!fully_permutable(nest, analysis, transform, &result.reason)) {
+    return result;
+  }
+  result.legal = true;
+  result.reason = "legal: the band is fully permutable (T d >= 0 for every dependence), so rectangular tiles keep every dependence";
+
+  const auto system = transformed_domain(nest, *inverse);
+  const auto projection = project_bounds(system, depth);
+  std::vector<std::pair<std::int64_t, std::int64_t>> ranges;
+  for (std::size_t k = 0; k < depth; ++k) {
+    ranges.push_back(global_range(system, depth, k));
+  }
+
+  std::vector<std::string> point_names;
+  std::vector<std::string> tile_names;
+  for (std::size_t k = 0; k < depth; ++k) {
+    point_names.push_back("c" + std::to_string(k + 1));
+    tile_names.push_back("t" + std::to_string(k + 1));
+  }
+  std::ostringstream code;
+  std::size_t indent = 0;
+  for (std::size_t k = 0; k < depth; ++k) {
+    if (tile_sizes[k] == 0) {
+      continue;
+    }
+    code << std::string(2 * indent++, ' ') << "for " << tile_names[k] << " = " << ranges[k].first << " to "
+         << ranges[k].second << " step " << tile_sizes[k] << " {\n";
+  }
+  for (std::size_t k = 0; k < depth; ++k) {
+    const bool tiled = tile_sizes[k] != 0;
+    code << std::string(2 * indent++, ' ') << "for " << point_names[k] << " = "
+         << bounds_text(projection.lowers[k], true, point_names, tiled ? tile_names[k] : "") << " to "
+         << bounds_text(projection.uppers[k], false, point_names,
+                        tiled ? tile_names[k] + " + " + std::to_string(tile_sizes[k] - 1) : "")
+         << " {\n";
+  }
+  for (std::size_t loop = 0; loop < depth; ++loop) {
+    Affine row((*inverse)[loop]);
+    row.push_back(0);
+    code << std::string(2 * indent, ' ') << nest.indices[loop] << " = " << affine_text(row, point_names) << '\n';
+  }
+  for (const auto& statement : nest.statements) {
+    code << std::string(2 * indent, ' ') << statement.text << '\n';
+  }
+  for (std::size_t level = indent; level-- > 0;) {
+    code << std::string(2 * level, ' ') << "}\n";
+  }
+  result.code = code.str();
+
+  // Run the generated nest: tile loops, then point loops clipped to the tile.
+  const Memory expected = execute(nest);
+  Memory actual;
+  const Layout layout = make_layout(nest, cache.line_elements);
+  LruCache lru(cache);
+  std::vector<std::int64_t> tile(depth, 0);
+  std::vector<std::int64_t> y(depth, 0);
+  bool out_of_domain = false;
+  bool tile_used = false;
+  std::function<void(std::size_t)> points = [&](std::size_t k) {
+    if (k == depth) {
+      const auto x = transform_vector(*inverse, y);
+      for (std::size_t loop = 0; loop < depth; ++loop) {
+        if (x[loop] < eval_affine(nest.lower[loop], x) || x[loop] > eval_affine(nest.upper[loop], x)) {
+          out_of_domain = true;
+          return;
+        }
+      }
+      tile_used = true;
+      ++result.tiled_instances;
+      run_instance(nest, x, actual);
+      trace_instance(nest, x, layout, lru, result.tiled_cache);
+      return;
+    }
+    if (projection.lowers[k].empty() || projection.uppers[k].empty()) {
+      return;
+    }
+    std::int64_t low = bound_value(projection.lowers[k], y, true);
+    std::int64_t high = bound_value(projection.uppers[k], y, false);
+    if (tile_sizes[k] != 0) {
+      low = std::max(low, tile[k]);
+      high = std::min(high, tile[k] + tile_sizes[k] - 1);
+    }
+    for (std::int64_t value = low; value <= high; ++value) {
+      y[k] = value;
+      points(k + 1);
+    }
+  };
+  std::function<void(std::size_t)> tiles = [&](std::size_t k) {
+    if (k == depth) {
+      tile_used = false;
+      points(0);
+      result.tiles += tile_used ? 1 : 0;
+      return;
+    }
+    if (tile_sizes[k] == 0) {
+      tiles(k + 1);
+      return;
+    }
+    for (std::int64_t start = ranges[k].first; start <= ranges[k].second; start += tile_sizes[k]) {
+      tile[k] = start;
+      tiles(k + 1);
+    }
+  };
+  if (std::all_of(ranges.begin(), ranges.end(), [](const auto& range) { return range.first <= range.second; })) {
+    tiles(0);
+  }
+  result.original_cache = simulate_cache(nest, cache);
+  std::vector<std::int64_t> point(depth, 0);
+  bool stop = false;
+  enumerate_domain(nest, 0, point, [&](const std::vector<std::int64_t>&) {
+    ++result.original_instances;
+    return true;
+  }, stop);
+  result.verified = !out_of_domain && result.tiled_instances == result.original_instances && actual == expected;
   return result;
 }
 

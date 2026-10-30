@@ -103,6 +103,54 @@ struct TransformResult {
 
 TransformResult apply_transformation(const LoopNest& nest, const DependenceAnalysis& analysis, const Matrix& transform);
 
+// ---- Loop tiling for locality (NEY709 (h)) ------------------------------------------------------
+//
+// Rectangular tiling of the band y = T x: tile loops t_k step s_k over the whole range of y_k, then point
+// loops y_k = max(lower_k, t_k) to min(upper_k, t_k + s_k - 1).  Tiling the band is legal when it is fully
+// permutable (Irigoin-Triolet, Wolf-Lam): no dependence instance has a negative component in T d.  The test
+// uses the exact distances when the domain was enumerated and Fourier-Motzkin otherwise (sound: it may
+// refuse a legal tiling, never accept an illegal one).  The effect on locality is measured by running the
+// address trace of both nests through a set-associative LRU cache (row-major arrays, one element per word).
+
+struct CacheConfig {
+  std::size_t line_elements = 8;  // 64-byte lines of 8-byte elements
+  std::size_t sets = 16;
+  std::size_t ways = 4;           // 16 x 4 x 64 B = 4 KiB
+};
+
+struct CacheStats {
+  std::size_t accesses = 0;
+  std::size_t misses = 0;
+  [[nodiscard]] double miss_rate() const {
+    return accesses == 0 ? 0.0 : static_cast<double>(misses) / static_cast<double>(accesses);
+  }
+};
+
+struct TileResult {
+  bool legal = false;
+  std::string reason;
+  std::vector<std::int64_t> tile_sizes;  // 0 = loop not tiled
+  std::string code;
+  bool verified = false;                 // every instance once, arrays identical to the original nest
+  std::size_t original_instances = 0;
+  std::size_t tiled_instances = 0;
+  std::size_t tiles = 0;                 // non-empty tiles
+  CacheStats original_cache;
+  CacheStats tiled_cache;
+};
+
+// True when every dependence instance has T d >= 0 componentwise; otherwise `reason` names one that does not.
+bool fully_permutable(const LoopNest& nest, const DependenceAnalysis& analysis, const Matrix& transform,
+                      std::string* reason = nullptr);
+// The lower-triangular unimodular skew S (unit diagonal, factors 0..max_factor, smallest sum first) that makes
+// S T fully permutable; nullopt when none exists in that range.
+std::optional<Matrix> find_tiling_skew(const LoopNest& nest, const DependenceAnalysis& analysis, const Matrix& transform,
+                                       std::int64_t max_factor = 3);
+TileResult apply_tiling(const LoopNest& nest, const DependenceAnalysis& analysis, const Matrix& transform,
+                        const std::vector<std::int64_t>& tile_sizes, const CacheConfig& cache = {});
+// Misses of the nest executed in its own order.
+CacheStats simulate_cache(const LoopNest& nest, const CacheConfig& cache);
+
 // Executes the nest (deterministic initial array contents) and returns every written element.
 std::map<std::string, std::map<std::vector<std::int64_t>, std::int64_t>> execute(const LoopNest& nest);
 

@@ -376,6 +376,13 @@ nexus_set_warnings(nexus_lp_schedule_test)
 nexus_enable_sanitizers(nexus_lp_schedule_test)
 add_test(NAME nexus_lp_schedule_test COMMAND $<TARGET_FILE:nexus_lp_schedule_test> "${PROJECT_SOURCE_DIR}")
 
+add_executable(nexus_tiling_test tiling_test.cpp)
+target_link_libraries(nexus_tiling_test PRIVATE nexus_polyhedral)
+nexus_apply_project_options(nexus_tiling_test)
+nexus_set_warnings(nexus_tiling_test)
+nexus_enable_sanitizers(nexus_tiling_test)
+add_test(NAME nexus_tiling_test COMMAND $<TARGET_FILE:nexus_tiling_test> "${PROJECT_SOURCE_DIR}")
+
 add_executable(nexus_remainder_unroll_test remainder_unroll_test.cpp)
 target_link_libraries(
   nexus_remainder_unroll_test
@@ -428,9 +435,29 @@ nexus_set_warnings(nexus_message_passing_test)
 nexus_enable_sanitizers(nexus_message_passing_test)
 add_test(NAME nexus_message_passing_test COMMAND $<TARGET_FILE:nexus_message_passing_test>)
 
+add_executable(nexus_network_contention_test network_contention_test.cpp)
+target_link_libraries(nexus_network_contention_test PRIVATE nexus_sim_parallel)
+nexus_apply_project_options(nexus_network_contention_test)
+nexus_set_warnings(nexus_network_contention_test)
+nexus_enable_sanitizers(nexus_network_contention_test)
+add_test(NAME nexus_network_contention_test COMMAND $<TARGET_FILE:nexus_network_contention_test>)
+
 add_executable(nexus_gpu_blocks_test gpu_blocks_test.cpp)
 target_link_libraries(nexus_gpu_blocks_test PRIVATE nexus_sim_simt nexus_mips_loader)
 nexus_apply_project_options(nexus_gpu_blocks_test)
 nexus_set_warnings(nexus_gpu_blocks_test)
 nexus_enable_sanitizers(nexus_gpu_blocks_test)
 add_test(NAME nexus_gpu_blocks_test COMMAND $<TARGET_FILE:nexus_gpu_blocks_test> "${PROJECT_SOURCE_DIR}")
+
+add_executable(nexus_region_flow_test region_flow_test.cpp)
+target_link_libraries(
+  nexus_region_flow_test
+  PRIVATE
+    nexus_frontend
+    nexus_semantics
+    nexus_ir
+    nexus_analysis)
+nexus_apply_project_options(nexus_region_flow_test)
+nexus_set_warnings(nexus_region_flow_test)
+nexus_enable_sanitizers(nexus_region_flow_test)
+add_test(NAME nexus_region_flow_test COMMAND $<TARGET_FILE:nexus_region_flow_test> "${PROJECT_SOURCE_DIR}")

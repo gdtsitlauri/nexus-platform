@@ -13,6 +13,7 @@
 #include "nexus/sim/memory/nonblocking_cache.hpp"
 #include "nexus/sim/memory/virtual_memory.hpp"
 #include "nexus/sim/parallel/message_passing.hpp"
+#include "nexus/sim/parallel/network.hpp"
 #include "nexus/sim/vector/model.hpp"
 
 int run_vector(int argc, char** argv) {
@@ -280,5 +281,111 @@ int run_message_passing_study(int argc, char** argv) {
     std::cout << ' ' << r.data[0][k];
   }
   std::cout << (r.data[0].size() > 8 ? " ..." : "") << '\n';
+  return 0;
+}
+
+// Interconnection networks with link contention (NEY704): mips-sim net <topology> [options]
+int run_network_study(int argc, char** argv) {
+  namespace mp = nexus::sim::parallel;
+  const std::string usage =
+      "usage: mips-sim net <bus|crossbar|ring|mesh|torus|hypercube> [--nodes P] "
+      "[--traffic uniform|transpose|complement|hotspot|neighbor] [--rate R] [--cycles C] [--flits F] "
+      "[--router-delay D] [--seed S] [--sweep]\n";
+  if (argc < 3) {
+    std::cerr << usage;
+    return 1;
+  }
+  const std::string name = argv[2];
+  mp::ContentionConfig config;
+  if (name == "bus") config.topology = mp::NetTopology::Bus;
+  else if (name == "crossbar") config.topology = mp::NetTopology::Crossbar;
+  else if (name == "ring") config.topology = mp::NetTopology::Ring;
+  else if (name == "mesh") config.topology = mp::NetTopology::Mesh;
+  else if (name == "torus") config.topology = mp::NetTopology::Torus;
+  else if (name == "hypercube") config.topology = mp::NetTopology::Hypercube;
+  else {
+    std::cerr << usage;
+    return 1;
+  }
+  mp::Traffic traffic = mp::Traffic::Uniform;
+  double rate = 0.1;
+  std::size_t cycles = 2000;
+  std::uint32_t seed = 1;
+  bool sweep = false;
+  for (int i = 3; i < argc; ++i) {
+    const std::string arg = argv[i];
+    if (arg == "--sweep") {
+      sweep = true;
+      continue;
+    }
+    if (i + 1 >= argc) {
+      std::cerr << usage;
+      return 1;
+    }
+    const std::string value = argv[++i];
+    if (arg == "--nodes") config.nodes = std::stoul(value);
+    else if (arg == "--rate") rate = std::stod(value);
+    else if (arg == "--cycles") cycles = std::stoul(value);
+    else if (arg == "--flits") config.flits = std::stoul(value);
+    else if (arg == "--router-delay") config.router_delay = std::stoul(value);
+    else if (arg == "--seed") seed = static_cast<std::uint32_t>(std::stoul(value));
+    else if (arg == "--traffic") {
+      if (value == "uniform") traffic = mp::Traffic::Uniform;
+      else if (value == "transpose") traffic = mp::Traffic::Transpose;
+      else if (value == "complement") traffic = mp::Traffic::BitComplement;
+      else if (value == "hotspot") traffic = mp::Traffic::Hotspot;
+      else if (value == "neighbor") traffic = mp::Traffic::Neighbor;
+      else {
+        std::cerr << usage;
+        return 1;
+      }
+    } else {
+      std::cerr << usage;
+      return 1;
+    }
+  }
+  if (const auto error = mp::validate(config); !error.empty()) {
+    std::cerr << "error: " << error << '\n';
+    return 1;
+  }
+  std::cout << mp::topology_name(config.topology) << ", " << config.nodes << " nodes, " << mp::traffic_name(traffic)
+            << " traffic, " << config.flits << "-flit packets, router delay " << config.router_delay << '\n';
+  if (traffic == mp::Traffic::Uniform) {
+    std::cout << "bisection bound on uniform throughput: " << std::fixed << std::setprecision(3)
+              << mp::uniform_throughput_bound(config) << " flits/node/cycle\n";
+  }
+  if (sweep) {
+    std::cout << "offered  accepted  avg latency  zero-load  max latency  busiest channel (utilisation)\n";
+    for (const double offered : {0.02, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1.0}) {
+      const auto r = mp::simulate_network(config, mp::make_traffic(traffic, config.nodes, offered, config.flits, cycles, seed));
+      if (r.packets == 0) {
+        continue;
+      }
+      const auto& busiest = r.channels[r.busiest];
+      std::cout << std::fixed << std::setprecision(2) << std::setw(7) << offered << std::setw(10) << std::setprecision(3)
+                << r.accepted_throughput << std::setw(13) << std::setprecision(1) << r.average_latency << std::setw(11)
+                << r.average_zero_load << std::setw(13) << r.max_latency << "  " << busiest.name << " ("
+                << std::setprecision(2) << 100.0 * static_cast<double>(busiest.busy) / static_cast<double>(r.makespan)
+                << "%)\n";
+    }
+    return 0;
+  }
+  const auto r = mp::simulate_network(config, mp::make_traffic(traffic, config.nodes, rate, config.flits, cycles, seed));
+  if (!r.success) {
+    std::cerr << "error: " << r.error << '\n';
+    return 1;
+  }
+  std::cout << r.packets << " packets (" << r.flits << " flits) offered at " << rate << " flits/node/cycle over "
+            << cycles << " cycles\n";
+  std::cout << std::fixed << std::setprecision(1) << "average latency " << r.average_latency << " cycles (zero-load "
+            << r.average_zero_load << ", contention " << r.average_latency - r.average_zero_load << "), max "
+            << r.max_latency << '\n';
+  std::cout << "waiting for busy channels: " << r.contention_cycles << " cycles in total; last delivery at cycle "
+            << r.makespan << ", accepted " << std::setprecision(3) << r.accepted_throughput << " flits/node/cycle\n";
+  const auto& busiest = r.channels[r.busiest];
+  std::cout << "busiest channel " << busiest.name << ": " << busiest.packets << " packets, busy " << busiest.busy
+            << " of " << r.makespan << " cycles (" << std::setprecision(1)
+            << 100.0 * static_cast<double>(busiest.busy) / static_cast<double>(std::max<std::size_t>(r.makespan, 1))
+            << "%)\n";
   return 0;
 }

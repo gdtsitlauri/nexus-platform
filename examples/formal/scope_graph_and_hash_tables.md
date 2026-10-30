@@ -1,6 +1,6 @@
 # Scope Graph and Hash Tables
 
-Phase 2 semantic analysis uses one hash-table-like map per scope and walks outward when resolving a
+Semantic analysis uses one hash-table-like map per scope and walks outward when resolving a
 name.
 
 ## Worked Example

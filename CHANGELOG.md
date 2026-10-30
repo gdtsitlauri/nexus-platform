@@ -1,5 +1,24 @@
 # Changelog
 
+## [4.0.0] - 2026-10-30
+
+NEXUS becomes study material for students: simpler, with one study guide per course.
+
+- Study guides `docs/courses/` (NEY221, EY321, NEY606, NEY704, NEY613, NEY709): for every topic of the course
+  outline the point, a diagram, a real example with its output, the code to read and self-check questions
+- New README that starts from the courses; reading lists rewritten with the classic papers of each topic
+- NEY709: loop tiling with legality by full permutability, automatic skewing and an LRU cache model
+  (`nexusc poly ... tile`); region-based data flow rewritten after Aho et al. section 9.7 (region tree, transfer
+  functions with closure, checked against the iterative solver); dominators now ignore unreachable predecessors
+- NEY704: interconnection network with link contention (`mips-sim net`: bus, crossbar, ring, mesh, torus,
+  hypercube; uniform, transpose, bit-complement, hotspot and neighbour traffic; saturation sweeps)
+- New examples: `examples/cpu/hazards.s`, `examples/cpu/out_of_order.s`, `examples/source_lang/tiny.nx`,
+  `examples/loops/matmul_tiling.loop`, `examples/loops/stencil_skew.loop`
+- Removed what students do not need: development history, audits, benchmark reports and harness, the Colab
+  notebook and its results, toolchain comparison, Doxygen setup, placeholder folders, and the per-topic notes
+  that the guides replace
+- New test `nexus_docs_links`: every link and anchor in the documentation resolves
+
 ## [3.1.0] - 2026-10-30
 
 The remaining topics of the six outlines that 3.0.0 covered only in part:

@@ -28,5 +28,5 @@ An LR parser could accept a flatter, more ambiguous spelling such as:
 expr = expr "+" expr | expr "*" expr | "(" expr ")" | identifier | integer_literal ;
 ```
 
-That grammar is concise but harder to interpret by hand. Phase 2 chooses the LL-style factoring so
+That grammar is concise but harder to interpret by hand. The NEXUS parser chooses the LL-style factoring so
 the control flow of the parser is easy to inspect in C++.

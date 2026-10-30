@@ -1,6 +1,6 @@
 # Identifier DFA
 
-Phase 2 lexical analysis can be explained as a DFA.
+Lexical analysis can be explained as a DFA.
 
 ## Identifier and Integer States
 

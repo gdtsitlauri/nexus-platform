@@ -41,7 +41,7 @@ def main() -> int:
         "help output missing experimental parse usage",
     )
     require(
-        "nexusc opt <file> --analysis symbolic|region-liveness|affine|alias|interproc" in help_result.stdout,
+        "nexusc opt <file> --analysis symbolic|regions|affine|alias|interproc" in help_result.stdout,
         "help output missing Phase 9 analysis usage",
     )
     require(
@@ -160,16 +160,14 @@ def main() -> int:
     require(symbolic_result.returncode == 0, "symbolic opt analysis failed")
     require("func sum4 symbolic:" in symbolic_result.stdout, "symbolic analysis output missing function header")
 
-    region_result = run([str(nexusc), "opt", str(arrays), "--analysis", "region-liveness"])
-    require(region_result.returncode == 0, "region-liveness opt analysis failed")
+    region_result = run([str(nexusc), "opt", str(arrays), "--analysis", "regions"])
+    require(region_result.returncode == 0, "regions opt analysis failed")
+    require("func sum4 regions:" in region_result.stdout, "regions output missing function header")
     require(
-        "func sum4 region-liveness:" in region_result.stdout,
-        "region-liveness output missing function header",
+        "loop header bb1.while.cond {bb1, bb2}" in region_result.stdout,
+        "regions output missing loop region",
     )
-    require(
-        "(loop) {bb1.while.cond, bb2.while.body}" in region_result.stdout,
-        "region-liveness output missing loop region",
-    )
+    require("agrees" in region_result.stdout, "region solver disagrees with the iterative solver")
 
     affine_result = run([str(nexusc), "opt", str(arrays), "--analysis", "affine"])
     require(affine_result.returncode == 0, "affine opt analysis failed")

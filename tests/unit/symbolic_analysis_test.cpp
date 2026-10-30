@@ -115,32 +115,16 @@ int main() {
 
   const auto loop_module = lower_checked(loop_source);
   if (!loop_module.has_value()) {
-    std::cerr << "Expected region-liveness source to lower successfully.\n";
+    std::cerr << "Expected the region-analysis source to lower successfully.\n";
     return 1;
   }
 
   const auto& loop_function = loop_module->functions.front();
   const auto loop_cfg = nexus::compiler::analysis::build_cfg(loop_function);
-  const auto region = nexus::compiler::analysis::analyze_region_liveness(loop_function, loop_cfg);
-
-  bool saw_loop_region = false;
-  for (const auto& summary : region.regions) {
-    if (summary.is_loop && summary.blocks.size() == 2U && summary.blocks[0] == 1U &&
-        summary.blocks[1] == 2U) {
-      saw_loop_region = true;
-      break;
-    }
-  }
-  if (!saw_loop_region) {
-    std::cerr << "Expected region-based liveness to collapse the simple while loop region.\n";
-    return 1;
-  }
-
-  const std::string region_text =
-      nexus::compiler::analysis::print_region_liveness(loop_function, region);
-  if (!contains(region_text, "func sum4 region-liveness:") ||
-      !contains(region_text, "(loop) {bb1.while.cond, bb2.while.body}")) {
-    std::cerr << "Region-liveness text output was missing the expected loop region.\n";
+  const auto region_text = nexus::compiler::analysis::print_region_analysis(loop_function, loop_cfg);
+  if (!contains(region_text, "func sum4 regions:") || !contains(region_text, "loop header bb1.while.cond {bb1, bb2}") ||
+      !contains(region_text, "iterative solver") || !contains(region_text, "agrees")) {
+    std::cerr << "Region analysis output was missing the loop region or the iterative cross-check:\n" << region_text;
     return 1;
   }
 

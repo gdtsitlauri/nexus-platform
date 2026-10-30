@@ -55,8 +55,35 @@ DominatorResult compute_dominators(const ControlFlowGraph& cfg) {
     all_blocks.insert(block);
   }
 
+  // Dominance is defined over paths from the entry, so unreachable predecessors must not take part in the
+  // intersection (an unreachable block keeps the trivial set {block}).
+  std::vector<bool> reachable(cfg.successors.size(), false);
+  std::vector<ir::BlockId> work;
+  if (!cfg.successors.empty()) {
+    reachable[cfg.entry_block] = true;
+    work.push_back(cfg.entry_block);
+  }
+  while (!work.empty()) {
+    const ir::BlockId block = work.back();
+    work.pop_back();
+    for (ir::BlockId succ : cfg.successors[block]) {
+      if (!reachable[succ]) {
+        reachable[succ] = true;
+        work.push_back(succ);
+      }
+    }
+  }
+  std::vector<std::vector<ir::BlockId>> reachable_preds(cfg.successors.size());
   for (ir::BlockId block = 0; block < cfg.successors.size(); ++block) {
-    if (block == cfg.entry_block) {
+    for (ir::BlockId pred : cfg.predecessors[block]) {
+      if (reachable[pred]) {
+        reachable_preds[block].push_back(pred);
+      }
+    }
+  }
+
+  for (ir::BlockId block = 0; block < cfg.successors.size(); ++block) {
+    if (block == cfg.entry_block || !reachable[block]) {
       result.dominator_sets[block] = {block};
     } else {
       result.dominator_sets[block] = all_blocks;
@@ -67,11 +94,11 @@ DominatorResult compute_dominators(const ControlFlowGraph& cfg) {
   while (changed) {
     changed = false;
     for (ir::BlockId block = 0; block < cfg.successors.size(); ++block) {
-      if (block == cfg.entry_block) {
+      if (block == cfg.entry_block || !reachable[block]) {
         continue;
       }
 
-      std::set<ir::BlockId> updated = intersect_sets(result.dominator_sets, cfg.predecessors[block]);
+      std::set<ir::BlockId> updated = intersect_sets(result.dominator_sets, reachable_preds[block]);
       updated.insert(block);
       if (updated != result.dominator_sets[block]) {
         result.dominator_sets[block] = std::move(updated);

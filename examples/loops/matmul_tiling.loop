@@ -1,0 +1,13 @@
+# Matrix multiplication large enough that B (48 x 48 elements) does not fit in a 4 KiB cache.
+# The ijk order streams through a column of B for every (i, j), so almost every B access misses;
+# tiling all three loops keeps a block of each matrix in the cache while it is reused.
+# The domain (110592 instances) is too large to enumerate, so the tiling legality test uses
+# Fourier-Motzkin on the dependence systems instead of the exact distance vectors.
+params N = 48
+for i = 0 to N - 1 {
+  for j = 0 to N - 1 {
+    for k = 0 to N - 1 {
+      C[i][j] = C[i][j] + A[i][k] * B[k][j]
+    }
+  }
+}

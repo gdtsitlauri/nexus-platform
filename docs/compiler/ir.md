@@ -1,9 +1,8 @@
 # Intermediate Representation
 
-Nexus Phase 3 introduces a real, typed, non-SSA intermediate representation designed for analysis
-first and backend lowering later. The current IR is intentionally small: it is expressive enough
-for structured control flow and later MIPS lowering work, but it avoids premature SSA or backend
-complexity.
+NEXUS uses a typed three-address intermediate representation organised in basic blocks. Every analysis
+and optimisation works on it, and the MIPS back end lowers it to assembly. SSA form is built from it on
+demand (`nexusc analysis ssa`).
 
 ## Design Goals
 
@@ -32,7 +31,7 @@ The current type system mirrors the implemented NexusLang subset:
 
 ## Instruction Set
 
-Phase 3 implements the following instruction families:
+Instruction families:
 
 - constants:
   - `const_int`
@@ -58,7 +57,7 @@ Phase 3 implements the following instruction families:
 
 ## Lowering Strategy
 
-Lowering consumes the Phase 2 checked AST and emits:
+Lowering consumes the checked AST and emits:
 
 - one `Function` per NexusLang function
 - one `LocalInfo` per parameter or mutable local
@@ -112,16 +111,13 @@ func factorial(n: int) -> int {
 
 ## Relation to CFG and Analyses
 
-The IR is deliberately block-structured so later phases can build analyses directly on it:
+The IR is block-structured so analyses can be built directly on it:
 
 - `nexusc cfg <file>` shows predecessor/successor relationships
 - `nexusc dom <file>` shows dominator sets and immediate dominators
 - `nexusc analysis liveness <file>` shows block-local use/def and fixed-point in/out sets
 
-## Phase 3 Limitations
+## Limits
 
-- no SSA form or phi nodes
-- no globals
-- no aggregate literals
-- no backend-specific calling convention or register assignment
-- no optimization passes yet; only the analysis substrate is present
+- no globals and no aggregate literals
+- locals live in memory slots (`load`/`store`); SSA form and register allocation are separate steps

@@ -1,11 +1,10 @@
 # NexusLang Language Specification
 
-NexusLang is a small, statically typed educational language designed for the Nexus frontend and
-later compiler/architecture phases. Phase 2 implements a bounded core that is large enough to
-exercise lexing, parsing, AST construction, and semantic analysis without pulling in IR or backend
-concerns.
+NexusLang is a small, statically typed teaching language. It is large enough to exercise every phase of
+the compiler (lexing, parsing, semantic analysis, IR, optimisation, MIPS code) and small enough to read
+in one sitting.
 
-## Implemented Phase 2 Subset
+## The language
 
 - scalar types: `int`, `bool`
 - function return type: `int`, `bool`, or `void`
@@ -62,7 +61,7 @@ concerns.
 - scalar types: `int`, `bool`, `void`
 - array types: scalar base plus one or more postfix extents
   - examples: `int[4]`, `bool[8][2]`
-- Phase 2 semantic rule: function return types must be scalar or `void`
+- semantic rule: function return types must be scalar or `void`
 
 ## Statements
 
@@ -90,7 +89,7 @@ From highest to lowest:
 | logical and | `&&` | left |
 | logical or | `||` | left |
 
-Assignment is a statement form in Phase 2, not an expression form.
+Assignment is a statement, not an expression.
 
 ## Function Definitions
 
@@ -190,7 +189,7 @@ fn bad(flag: bool) -> int {
 }
 ```
 
-## Phase 2 Deliberate Limits
+## Deliberate limits
 
 - no structs
 - no global variables

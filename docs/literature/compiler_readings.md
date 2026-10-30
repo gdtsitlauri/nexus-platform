@@ -1,36 +1,24 @@
-# Compiler Readings
+# Compiler readings (NEY613, NEY709)
 
-These notes tie core compiler readings to the concrete Nexus implementation.
+Classic papers behind the topics of the compiler guides. Read the paper, then run the matching example in the
+guide section next to it.
 
-## 1. Aho, Sethi, and Ullman, *Compilers: Principles, Techniques, and Tools*
+| paper | topic | in NEXUS |
+| --- | --- | --- |
+| D. E. Knuth, *On the Translation of Languages from Left to Right*, Information and Control, 1965 | LR parsing | [NEY613 §3](../courses/NEY613.md#3-syntax-analysis-ll-and-lr-parsing) |
+| F. DeRemer, *Simple LR(k) Grammars*, CACM, 1971 | SLR and LALR tables | [NEY613 §3](../courses/NEY613.md#3-syntax-analysis-ll-and-lr-parsing) |
+| D. E. Knuth, *Semantics of Context-Free Languages*, Mathematical Systems Theory, 1968 | attribute grammars | [NEY613 §4](../courses/NEY613.md#4-semantic-analysis-and-attribute-grammars) |
+| M. Poletto, V. Sarkar, *Linear Scan Register Allocation*, ACM TOPLAS, 1999 | register allocation | [NEY613 §6](../courses/NEY613.md#6-code-generation-instruction-selection-and-register-allocation) |
+| J. Earley, *An Efficient Context-Free Parsing Algorithm*, CACM, 1970 | generalised parsing | [NEY709 §1](../courses/NEY709.md#1-front-end-extras-generalised-parsing-and-type-systems) |
+| L. Damas, R. Milner, *Principal Type-Schemes for Functional Programs*, POPL, 1982 | type inference | [NEY709 §1](../courses/NEY709.md#1-front-end-extras-generalised-parsing-and-type-systems) |
+| R. Cytron et al., *Efficiently Computing Static Single Assignment Form and the Control Dependence Graph*, ACM TOPLAS, 1991 | SSA, dominance frontiers | [NEY709 §2](../courses/NEY709.md#2-intermediate-representations-and-ssa) |
+| G. A. Kildall, *A Unified Approach to Global Program Optimization*, POPL, 1973 | data-flow frameworks, lattices | [NEY709 §4](../courses/NEY709.md#4-data-flow-analysis-iterative-and-region-based) |
+| F. E. Allen, J. Cocke, *A Program Data Flow Analysis Procedure*, CACM, 1976 | interval (region-based) analysis | [NEY709 §4](../courses/NEY709.md#4-data-flow-analysis-iterative-and-region-based) |
+| M. N. Wegman, F. K. Zadeck, *Constant Propagation with Conditional Branches*, ACM TOPLAS, 1991 | SCCP | [NEY709 §5](../courses/NEY709.md#5-using-the-analyses-constants-and-symbolic-analysis) |
+| L. Lamport, *The Parallel Execution of DO Loops*, CACM, 1974 | hyperplane (wavefront) schedules | [NEY709 §7](../courses/NEY709.md#7-iteration-spaces-and-polyhedral-transformations) |
+| M. E. Wolf, M. S. Lam, *A Data Locality Optimizing Algorithm*, PLDI, 1991 | unimodular transformations, tiling | [NEY709 §7](../courses/NEY709.md#7-iteration-spaces-and-polyhedral-transformations) |
+| P. Feautrier, *Some Efficient Solutions to the Affine Scheduling Problem*, Int. J. Parallel Programming, 1992 | schedules by linear programming | [NEY709 §7](../courses/NEY709.md#7-iteration-spaces-and-polyhedral-transformations) |
+| L. O. Andersen, *Program Analysis and Specialization for the C Programming Language*, PhD thesis, 1994 | points-to analysis | [NEY709 §8](../courses/NEY709.md#8-pointers-calls-and-interprocedural-optimisation) |
 
-- Why it matters: classic reference for lexing, parsing, ASTs, semantics, and introductory optimization.
-- Nexus link: the handwritten lexer/parser and bounded semantic analyzer follow the same “small real compiler” teaching style.
-
-## 2. Cytron et al., *Efficiently Computing Static Single Assignment Form and the Control Dependence Graph* (1991)
-
-- Why it matters: classic SSA reference.
-- Nexus link: Nexus deliberately stops short of full SSA, but dominators and CFGs already prepare the ground for it.
-
-## 3. Allen and Kennedy, *Optimizing Compilers for Modern Architectures*
-
-- Why it matters: strong treatment of dependence analysis and loop transformations.
-- Nexus link: Phase 9 implements only bounded unrolling, but the locality/polyhedral documentation points toward this line of work.
-
-## 4. Appel, *Modern Compiler Implementation*
-
-- Why it matters: practical bridge between compiler theory and real implementation.
-- Nexus link: the typed three-address IR and explicit lowering passes fit this style well.
-
-## 5. Muchnick, *Advanced Compiler Design and Implementation*
-
-- Why it matters: still an excellent reference for register allocation, alias analysis, and interprocedural work.
-- Nexus link: Phase 9’s symbolic, alias, and interprocedural analyses are intentionally much smaller, but this is the right expansion path.
-
-## Read-With-Code Suggestions
-
-```bash
-./build/bin/nexusc ir examples/source_lang/factorial.nx
-./build/bin/nexusc opt examples/source_lang/fixed_trip_unroll.nx --pass unroll
-./build/bin/nexusc opt examples/source_lang/interproc_fold.nx --pass interproc-constfold
-```
+Books: Aho, Lam, Sethi, Ullman, *Compilers: Principles, Techniques, and Tools* (2nd ed.; region-based analysis
+is section 9.7); Allen, Kennedy, *Optimizing Compilers for Modern Architectures*.

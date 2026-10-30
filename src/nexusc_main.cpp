@@ -64,7 +64,7 @@ void print_usage(std::ostream& stream) {
          << "  nexusc analysis regalloc <file>\n"
          << "  nexusc analysis ssa|sccp <file>\n"
          << "  nexusc experimental-parse <file> --mode parallel|bison-lr\n"
-         << "  nexusc opt <file> --analysis symbolic|region-liveness|affine|alias|interproc\n"
+         << "  nexusc opt <file> --analysis symbolic|regions|affine|alias|interproc\n"
          << "  nexusc opt <file> --pass unroll|unroll-symbolic|strip-mine|interproc-constfold\n"
          << "  nexusc opt <file> --pass unroll-remainder [--factor K]\n"
          << "  nexusc compile <file> -S [-o out.s]\n"
@@ -74,6 +74,7 @@ void print_usage(std::ostream& stream) {
          << "  nexusc regex <pattern> [--nfa] [--match <text>...]\n"
          << "  nexusc infer \"<mini-ML expression>\" [--trace]\n"
          << "  nexusc poly <file.loop> [interchange a b | reverse k | skew target source factor]... | schedule\n"
+         << "  nexusc poly <file.loop> [transformations | autoskew] tile s1..sd [cache line sets ways]   loop tiling\n"
          << "  nexusc graph <file.graph>          DFS/BFS, edge kinds, topological order, SCCs, Warshall closure\n"
          << "  nexusc tree \"a(b(d e) c)\"          preorder, inorder, postorder, level order\n"
          << "  nexusc hash <word>...                 chained hash table: buckets, rehashes, probes\n"
@@ -317,10 +318,9 @@ int run_analysis(const LoadedSource& loaded_source, const std::string& analysis_
       std::cout << nexus::compiler::analysis::print_symbolic(module->functions[index], cfg, symbolic);
       continue;
     }
-    if (analysis_name == "region-liveness") {
+    if (analysis_name == "regions") {
       const auto cfg = nexus::compiler::analysis::build_cfg(module->functions[index]);
-      const auto region = nexus::compiler::analysis::analyze_region_liveness(module->functions[index], cfg);
-      std::cout << nexus::compiler::analysis::print_region_liveness(module->functions[index], region);
+      std::cout << nexus::compiler::analysis::print_region_analysis(module->functions[index], cfg);
       continue;
     }
     if (analysis_name == "alias") {
@@ -746,9 +746,42 @@ int run_poly(int argc, char** argv) {
     }
   };
   std::string description;
+  std::vector<std::int64_t> tile_sizes;
+  poly::CacheConfig cache;
   for (int index = 3; index < argc;) {
     const std::string op = argv[index];
     std::optional<poly::Matrix> step;
+    if (op == "tile") {
+      tile_sizes.clear();
+      for (std::size_t loop = 0; loop < depth; ++loop) {
+        if (!number(index + 1 + static_cast<int>(loop))) {
+          std::cerr << "error: 'tile' needs " << depth << " tile sizes (0 = not tiled)\n";
+          return 1;
+        }
+        tile_sizes.push_back(*number(index + 1 + static_cast<int>(loop)));
+      }
+      index += 1 + static_cast<int>(depth);
+      continue;
+    }
+    if (op == "cache" && number(index + 1) && number(index + 2) && number(index + 3) && *number(index + 1) > 0 &&
+        *number(index + 2) > 0 && *number(index + 3) > 0) {
+      cache.line_elements = static_cast<std::size_t>(*number(index + 1));
+      cache.sets = static_cast<std::size_t>(*number(index + 2));
+      cache.ways = static_cast<std::size_t>(*number(index + 3));
+      index += 4;
+      continue;
+    }
+    if (op == "autoskew") {
+      const auto skewed = poly::find_tiling_skew(nest, analysis, transform);
+      if (!skewed.has_value()) {
+        std::cerr << "error: no skew with factors 0..3 makes the nest fully permutable\n";
+        return 2;
+      }
+      transform = *skewed;
+      description += (description.empty() ? "" : " then ") + op;
+      index += 1;
+      continue;
+    }
     if (op == "interchange" && number(index + 1) && number(index + 2)) {
       step = poly::interchange_matrix(depth, static_cast<std::size_t>(*number(index + 1)), static_cast<std::size_t>(*number(index + 2)));
       index += 3;
@@ -770,7 +803,7 @@ int run_poly(int argc, char** argv) {
     transform = poly::multiply(*step, transform);
     description += (description.empty() ? "" : " then ") + op;
   }
-  std::cout << "transformation (" << description << "), T =";
+  std::cout << "transformation (" << (description.empty() ? "identity" : description) << "), T =";
   for (const auto& row : transform) {
     std::cout << " [";
     for (std::size_t col = 0; col < row.size(); ++col) {
@@ -779,6 +812,22 @@ int run_poly(int argc, char** argv) {
     std::cout << ']';
   }
   std::cout << '\n';
+  if (!tile_sizes.empty()) {
+    const auto tiled = poly::apply_tiling(nest, analysis, transform, tile_sizes, cache);
+    std::cout << tiled.reason << '\n';
+    if (!tiled.legal) {
+      return 2;
+    }
+    std::cout << tiled.code << "verification: " << tiled.tiled_instances << " of " << tiled.original_instances
+              << " instances executed in " << tiled.tiles << " tiles, arrays "
+              << (tiled.verified ? "identical to the original nest" : "DIFFER") << '\n';
+    std::cout << "cache (" << cache.line_elements << "-element lines, " << cache.sets << " sets, " << cache.ways
+              << " ways, LRU): original " << tiled.original_cache.misses << " misses / "
+              << tiled.original_cache.accesses << " accesses (" << std::fixed << std::setprecision(2)
+              << 100.0 * tiled.original_cache.miss_rate() << "%), tiled " << tiled.tiled_cache.misses << " misses ("
+              << 100.0 * tiled.tiled_cache.miss_rate() << "%)\n";
+    return tiled.verified ? 0 : 1;
+  }
   const auto result = poly::apply_transformation(nest, analysis, transform);
   std::cout << result.reason << '\n';
   if (!result.legal) {

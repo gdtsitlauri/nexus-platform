@@ -1,9 +1,9 @@
 BUILD_DIR ?= build
 
-.PHONY: configure build test docs audit hdl clean
+.PHONY: configure build test hdl flow clean
 
 configure:
-	cmake -S . -B $(BUILD_DIR) -G Ninja
+	cmake -S . -B $(BUILD_DIR) -G Ninja -DCMAKE_BUILD_TYPE=Release
 
 build: configure
 	cmake --build $(BUILD_DIR) --parallel 2
@@ -12,13 +12,10 @@ test: build
 	ctest --test-dir $(BUILD_DIR) --output-on-failure -j1
 
 hdl:
-	./scripts/test_hdl.sh all
+	python3 scripts/test_hdl.py all
 
-docs: configure
-	cmake --build $(BUILD_DIR) --target docs
-
-audit:
-	python3 scripts/audit_phase1.py .
+flow: build
+	python3 scripts/nexus_flow.py $(BUILD_DIR)/bin
 
 clean:
 	rm -rf $(BUILD_DIR)

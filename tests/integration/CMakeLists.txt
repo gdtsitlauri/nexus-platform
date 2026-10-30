@@ -10,11 +10,6 @@ set_tests_properties(
   PROPERTIES
     PASS_REGULAR_EXPRESSION "Nexus / NexusLang Platform")
 
-add_test(
-  NAME phase1_scaffold_audit
-  COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/audit_phase1.py"
-          "${PROJECT_SOURCE_DIR}")
-
 add_test(NAME nexus_hdl_adder COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/test_hdl.py" adder)
 add_test(NAME nexus_hdl_alu COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/test_hdl.py" alu)
 add_test(NAME nexus_hdl_multiplier COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/test_hdl.py" multiplier)
@@ -30,40 +25,13 @@ set_tests_properties(
   PROPERTIES SKIP_RETURN_CODE 77)
 
 add_test(
-  NAME nexus_phase10_cli
+  NAME nexus_cli
   COMMAND
     "${Python3_EXECUTABLE}"
     "${PROJECT_SOURCE_DIR}/tests/integration/nexusc_cli_test.py"
     "$<TARGET_FILE:nexusc>"
     "$<TARGET_FILE:mips_sim>"
     "${PROJECT_SOURCE_DIR}")
-
-add_test(
-  NAME nexus_phase7_benchmarks
-  COMMAND
-    "${Python3_EXECUTABLE}"
-    "${PROJECT_SOURCE_DIR}/tests/integration/benchmark_harness_test.py"
-    "$<TARGET_FILE:nexusc>"
-    "$<TARGET_FILE:mips_sim>"
-    "${PROJECT_SOURCE_DIR}")
-
-add_test(
-  NAME nexus_phase8_amdahl
-  COMMAND
-    "${Python3_EXECUTABLE}"
-    "${PROJECT_SOURCE_DIR}/tests/integration/advanced_amdahl_test.py"
-    "$<TARGET_FILE:nexusc>"
-    "$<TARGET_FILE:mips_sim>"
-    "${PROJECT_SOURCE_DIR}")
-
-add_test(
-  NAME nexus_toolchain_compare
-  COMMAND
-    "${Python3_EXECUTABLE}"
-    "${PROJECT_SOURCE_DIR}/tests/integration/toolchain_compare_test.py"
-    "$<TARGET_FILE:nexusc>"
-    "${PROJECT_SOURCE_DIR}")
-set_tests_properties(nexus_toolchain_compare PROPERTIES SKIP_RETURN_CODE 77)
 
 if(NEXUS_HAVE_OPENMP)
 add_test(
@@ -96,16 +64,6 @@ add_test(
     "$<TARGET_FILE_DIR:mips_sim>"
     "${PROJECT_SOURCE_DIR}")
 
-if(NEXUS_HAVE_OPENMP AND NEXUS_HAVE_MPI)
-add_test(
-  NAME nexus_bench_wrapper_phase10
-  COMMAND
-    "${Python3_EXECUTABLE}"
-    "${PROJECT_SOURCE_DIR}/tests/integration/parallel_bench_test.py"
-    "$<TARGET_FILE_DIR:mips_sim>"
-    "${PROJECT_SOURCE_DIR}")
-endif()
-
 add_test(
   NAME nexus_gpu_optional
   COMMAND
@@ -113,30 +71,7 @@ add_test(
     "${PROJECT_SOURCE_DIR}/tests/integration/gpu_optional_test.py"
     "$<TARGET_FILE_DIR:mips_sim>"
     "${PROJECT_SOURCE_DIR}")
-
-add_test(
-  NAME nexus_literature_docs
-  COMMAND
-    "${Python3_EXECUTABLE}"
-    "${PROJECT_SOURCE_DIR}/tests/integration/final_docs_test.py"
-    literature
-    "${PROJECT_SOURCE_DIR}")
-
-add_test(
-  NAME nexus_report_docs
-  COMMAND
-    "${Python3_EXECUTABLE}"
-    "${PROJECT_SOURCE_DIR}/tests/integration/final_docs_test.py"
-    report
-    "${PROJECT_SOURCE_DIR}")
-
-add_test(
-  NAME nexus_final_validation
-  COMMAND
-    "${Python3_EXECUTABLE}"
-    "${PROJECT_SOURCE_DIR}/tests/integration/final_docs_test.py"
-    final
-    "${PROJECT_SOURCE_DIR}")
+set_tests_properties(nexus_gpu_optional PROPERTIES SKIP_RETURN_CODE 77)
 
 add_test(
   NAME nexus_cross_model_differential
@@ -206,3 +141,7 @@ add_test(
   NAME nexus_full_flow
   COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/scripts/nexus_flow.py" "$<TARGET_FILE_DIR:mips_sim>")
 set_tests_properties(nexus_full_flow PROPERTIES SKIP_RETURN_CODE 77)
+
+add_test(
+  NAME nexus_docs_links
+  COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/tests/integration/docs_links_test.py" "${PROJECT_SOURCE_DIR}")

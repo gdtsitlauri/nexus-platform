@@ -1,5 +1,3 @@
-add_subdirectory(source_lang)
-add_subdirectory(mips)
 add_subdirectory(openmp)
 add_subdirectory(mpi)
 add_subdirectory(simd)

@@ -2,14 +2,14 @@ cmake_minimum_required(VERSION 3.25)
 
 project(
   Nexus
-  VERSION 3.1.0
+  VERSION 4.0.0
   DESCRIPTION "Nexus educational systems and compiler platform"
   LANGUAGES CXX)
 
-set(NEXUS_VERSION_LABEL "3.1.0" CACHE STRING "Human-readable project version label" FORCE)
+set(NEXUS_VERSION_LABEL "4.0.0" CACHE STRING "Human-readable project version label" FORCE)
 set(
   NEXUS_PHASE_LABEL
-  "3.0 - six-course coverage"
+  "4.0 - study guides"
   CACHE STRING "Current project phase" FORCE)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -38,19 +38,3 @@ include(cmake/Sanitizers.cmake)
 add_subdirectory(src)
 add_subdirectory(tests)
 
-find_package(Doxygen QUIET)
-if(DOXYGEN_FOUND)
-  configure_file("${PROJECT_SOURCE_DIR}/config/Doxyfile.in" "${PROJECT_BINARY_DIR}/Doxyfile" @ONLY)
-  add_custom_target(
-    docs
-    COMMAND "${DOXYGEN_EXECUTABLE}" "${PROJECT_BINARY_DIR}/Doxyfile"
-    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-    COMMENT "Generating documentation with Doxygen"
-    VERBATIM)
-else()
-  add_custom_target(
-    docs
-    COMMAND "${CMAKE_COMMAND}" -E echo "Doxygen not found; docs target skipped."
-    COMMENT "Documentation generation is unavailable"
-    VERBATIM)
-endif()

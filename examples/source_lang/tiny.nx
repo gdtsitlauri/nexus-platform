@@ -1,0 +1,4 @@
+fn main() -> int {
+  var x: int = 2 + 3 * 4;
+  return x;
+}
