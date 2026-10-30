@@ -83,6 +83,9 @@ RunResult run_program(const LoadedProgram& program, const RunOptions& options) {
     if (options.trace) {
       note_trace(instruction, state.pc, result);
     }
+    if (options.record_events) {
+      result.events.push_back(Event{.pc = state.pc, .opcode = instruction.opcode, .address = -1});
+    }
 
     std::size_t next_pc = state.pc + 1;
     std::string error;
@@ -138,6 +141,9 @@ RunResult run_program(const LoadedProgram& program, const RunOptions& options) {
         break;
       case Opcode::Lw: {
         const std::int32_t address = reg(state, instruction.rs) + instruction.immediate;
+        if (options.record_events) {
+          result.events.back().address = address;
+        }
         if (address == kConsoleStatus) {
           reg(state, instruction.rt) = 1;  // the ISA-level console is always ready
           break;
@@ -152,6 +158,9 @@ RunResult run_program(const LoadedProgram& program, const RunOptions& options) {
       }
       case Opcode::Sw: {
         const std::int32_t address = reg(state, instruction.rs) + instruction.immediate;
+        if (options.record_events) {
+          result.events.back().address = address;
+        }
         if (address == kConsoleData) {
           result.console_bytes.push_back(reg(state, instruction.rt));
           break;
