@@ -3,7 +3,8 @@ add_library(
   STATIC
     src/loop_unroll.cpp
     src/affine_stripmine.cpp
-    src/interprocedural_pass.cpp)
+    src/interprocedural_pass.cpp
+    src/modulo_schedule.cpp)
 
 add_library(Nexus::passes ALIAS nexus_passes)
 

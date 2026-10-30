@@ -78,6 +78,7 @@ void print_usage(std::ostream& stream) {
          << "  nexusc tree \"a(b(d e) c)\"          preorder, inorder, postorder, level order\n"
          << "  nexusc hash <word>...                 chained hash table: buckets, rehashes, probes\n"
          << "  nexusc attr knuth <binary> | decl \"<declaration>\"   inherited attributes, dependency graph\n"
+         << "  nexusc modsched <file.ddg>            software pipelining: ResMII, RecMII, modulo schedule, kernel\n"
          << "  nexusc grammar <file.g> first-follow|transform|ll1|lr0|slr|lr1|lalr|earley [\"tokens\"] [--items]\n";
 }
 
@@ -889,6 +890,7 @@ int run_foundations(const std::string& command, int argc, char** argv) {
 }
 
 int run_attributes(int argc, char** argv);  // nexusc_course_tools.cpp
+int run_modulo_schedule(int argc, char** argv);  // nexusc_course_tools.cpp
 
 int main(int argc, char** argv) {
   if (argc == 1) {
@@ -1005,6 +1007,10 @@ int main(int argc, char** argv) {
       return 1;
     }
     return run_foundations(command, argc, argv);
+  }
+
+  if (command == "modsched") {
+    return run_modulo_schedule(argc, argv);
   }
 
   if (command == "attr") {

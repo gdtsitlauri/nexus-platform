@@ -1,0 +1,14 @@
+# Dot product, s = s + x[i]*y[i]: the floating-point add carries a recurrence (latency 4, distance 1).
+resources alu 2, mem 2, fmul 1, fadd 1
+op ldx  mem  latency 2
+op ldy  mem  latency 2
+op mul  fmul latency 4
+op acc  fadd latency 4
+op inc  alu  latency 1
+edge ldx -> mul
+edge ldy -> mul
+edge mul -> acc
+edge acc -> acc distance 1
+edge inc -> inc distance 1
+edge inc -> ldx distance 1
+edge inc -> ldy distance 1

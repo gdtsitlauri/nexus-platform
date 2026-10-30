@@ -1,0 +1,18 @@
+# DAXPY loop body, y[i] = a*x[i] + y[i], on a VLIW with 2 ALUs, 1 memory port, 1 multiplier and 1 branch unit.
+resources alu 2, mem 1, mul 1, branch 1
+op ldx  mem    latency 2
+op ldy  mem    latency 2
+op mul  mul    latency 3
+op add  alu    latency 1
+op st   mem    latency 1
+op inc  alu    latency 1
+op br   branch latency 1
+edge ldx -> mul
+edge mul -> add
+edge ldy -> add
+edge add -> st
+edge inc -> inc distance 1
+edge inc -> ldx distance 1
+edge inc -> ldy distance 1
+edge inc -> st  distance 1
+edge inc -> br

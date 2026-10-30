@@ -1,9 +1,12 @@
 // nexusc commands for course topics that are not part of the NexusLang compiler pipeline itself:
-// attribute grammars with inherited attributes (NEY613).
+// attribute grammars with inherited attributes (NEY613) and software pipelining (NEY606).
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 
 #include "nexus/compiler/formal/attributes.hpp"
+#include "nexus/compiler/passes/modulo_schedule.hpp"
 
 int run_attributes(int argc, char** argv) {
   namespace fm = nexus::compiler::formal;
@@ -59,4 +62,30 @@ int run_attributes(int argc, char** argv) {
     std::cout << "value: " << graph.values.at(fm::Instance{0, "val"}) << '\n';
   }
   return 0;
+}
+
+// Software pipelining of a loop's dependence graph (NEY606).
+int run_modulo_schedule(int argc, char** argv) {
+  namespace ms = nexus::compiler::passes;
+  if (argc < 3) {
+    std::cerr << "usage: nexusc modsched <file.ddg>\n";
+    return 1;
+  }
+  std::ifstream in(argv[2]);
+  if (!in) {
+    std::cerr << "error: cannot open " << argv[2] << '\n';
+    return 1;
+  }
+  std::stringstream text;
+  text << in.rdbuf();
+  const auto parsed = ms::parse_ddg(text.str());
+  if (!parsed.ddg) {
+    std::cerr << "error: " << parsed.error << '\n';
+    return 1;
+  }
+  const auto schedule = ms::modulo_schedule(*parsed.ddg);
+  std::cout << ms::print_schedule(*parsed.ddg, schedule);
+  const auto problem = schedule.success ? ms::verify_schedule(*parsed.ddg, schedule) : schedule.error;
+  std::cout << "verification: " << (problem.empty() ? "every dependence and resource limit holds" : problem) << '\n';
+  return problem.empty() ? 0 : 1;
 }
