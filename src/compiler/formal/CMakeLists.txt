@@ -2,7 +2,8 @@ add_library(
   nexus_formal
   STATIC
     src/automata.cpp
-    src/grammar.cpp)
+    src/grammar.cpp
+    src/attributes.cpp)
 
 add_library(Nexus::formal ALIAS nexus_formal)
 

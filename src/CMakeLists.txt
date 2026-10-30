@@ -9,7 +9,7 @@ add_subdirectory(sim)
 add_subdirectory(hdl)
 add_subdirectory(benchmarks)
 
-add_executable(nexusc nexusc_main.cpp)
+add_executable(nexusc nexusc_main.cpp nexusc_course_tools.cpp)
 target_link_libraries(
   nexusc
   PRIVATE

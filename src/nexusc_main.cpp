@@ -20,6 +20,7 @@
 #include "nexus/compiler/backend_mips/regalloc.hpp"
 #include "nexus/compiler/experimental_parallel_parsing/bison_lr.hpp"
 #include "nexus/compiler/experimental_parallel_parsing/prototype.hpp"
+#include "nexus/compiler/formal/attributes.hpp"
 #include "nexus/compiler/formal/automata.hpp"
 #include "nexus/compiler/foundations/foundations.hpp"
 #include "nexus/compiler/formal/grammar.hpp"
@@ -74,6 +75,7 @@ void print_usage(std::ostream& stream) {
          << "  nexusc graph <file.graph>          DFS/BFS, edge kinds, topological order, SCCs, Warshall closure\n"
          << "  nexusc tree \"a(b(d e) c)\"          preorder, inorder, postorder, level order\n"
          << "  nexusc hash <word>...                 chained hash table: buckets, rehashes, probes\n"
+         << "  nexusc attr knuth <binary> | decl \"<declaration>\"   inherited attributes, dependency graph\n"
          << "  nexusc grammar <file.g> first-follow|transform|ll1|lr0|slr|lr1|lalr|earley [\"tokens\"] [--items]\n";
 }
 
@@ -868,6 +870,8 @@ int run_foundations(const std::string& command, int argc, char** argv) {
   return 0;
 }
 
+int run_attributes(int argc, char** argv);  // nexusc_course_tools.cpp
+
 int main(int argc, char** argv) {
   if (argc == 1) {
     std::cout << nexus::common::banner_text("nexusc") << '\n'
@@ -979,6 +983,10 @@ int main(int argc, char** argv) {
       return 1;
     }
     return run_foundations(command, argc, argv);
+  }
+
+  if (command == "attr") {
+    return run_attributes(argc, argv);
   }
 
   if (command == "grammar") {
